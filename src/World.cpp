@@ -1,18 +1,19 @@
 #include "World.hpp"
+#include <cmath>
 #include <cstdlib>
 #include <iostream>
 
-World::World(float sizeX, float sizeY, float gridSizeX, float gridSizeY) {
-	std::cout << "World::World : Size [" << sizeX << ", " << sizeY << "]   gridSize [" << gridSizeX << ", " << gridSizeY << "]" << std::endl;
+World::World(float sizeX, float sizeY, float cellSizeX, float cellSizeY) {
+	std::cout << "World::World : Size [" << sizeX << ", " << sizeY << "]   cellSize [" << cellSizeX << ", " << cellSizeY << "]" << std::endl;
 	size[0] = sizeX;
 	size[1] = sizeY;
-	gridSize[0] = gridSizeX;
-	gridSize[1] = gridSizeY;
-	cellSize[0] = sizeX / gridSizeX;
-	cellSize[1] = sizeY / gridSizeY;
-	std::cout << "cellSize :[" << cellSize[0] << ", " << cellSize[1] << "]" << std::endl;
+	cellSize[0] = cellSizeX;
+	cellSize[1] = cellSizeY;
+	gridSize[0] = ceil(sizeX / cellSizeX);
+	gridSize[1] = ceil(sizeY / cellSizeY);
+	std::cout << "gridSize :[" << gridSize[0] << ", " << gridSize[1] << "]" << std::endl;
 
-	grid = (Cell*)malloc(gridSizeX*gridSizeY* sizeof(Cell));
+	grid = (Cell*)malloc(gridSize[0]*gridSize[1]* sizeof(Cell));
 }
 
 

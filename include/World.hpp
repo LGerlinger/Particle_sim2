@@ -2,6 +2,7 @@
 
 #include "Particle.hpp"
 #include "Segment.hpp"
+
 #include <cstdint>
 #include <vector>
 
@@ -21,7 +22,7 @@ public :
 	Cell* grid;
 	inline Cell& getCell(uint16_t x, uint16_t y) {return grid[y*gridSize[0] +x];};
 
-	World(float sizeX, float sizeY, float gridSizeX, float gridSizeY);
+	World(float sizeX, float sizeY, float cellSizeX, float cellSizeY);
 
 	void update_grid_particle_contenance(Particle* particle_array, uint32_t array_size);
 	void update_grid_segment_contenance(Segment* segment_array, uint32_t array_size);

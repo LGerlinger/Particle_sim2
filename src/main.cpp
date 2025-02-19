@@ -1,8 +1,8 @@
 #include "Renderer.hpp"
+
 #include <chrono>
 #include <cstdint>
 #include <iostream>
-#include <thread>
 
 
 class Consometre {
@@ -23,14 +23,19 @@ public :
 uint32_t Consometre::NB_TICK_SEC = 1000000000;
 
 int main() {
-	sf::RenderWindow window(sf::VideoMode(1000, 1000), "Particle sim");
-	sf::Event event;
-	// sf::RenderWindow window(sf::VideoMode(1000, 500), "Particle sim", sf::Style::Fullscreen);
 	
 	Particle_simulator sim;
 
-	Renderer renderer(window, sim);
-	renderer.update_display();
+	Renderer renderer(sim);
+	bool& keep_rendering = renderer.render;
+	std::thread render_thread(&Renderer::start_rendering, &renderer);
+	std::this_thread::sleep_for(std::chrono::milliseconds(1000));
+
+	sim.start_simulation_threads();
+	render_thread.join();
+	return 0;
+
+	// I need to make the main thread continue but It shall do for now
 
 	Consometre conso_tot;
 	Consometre conso_simu;
@@ -38,15 +43,10 @@ int main() {
 	uint32_t nb_frames = 0;
 
 	uint32_t i=0;
-	while (window.isOpen()) {
-		while (window.pollEvent(event)) {}
+	while (true) {
 
 		conso_tot.Start();
 		// std::this_thread::sleep_for(std::chrono::milliseconds(10));
-		
-		conso_render.Start();
-		renderer.update_display();
-		conso_render.End();
 
 		conso_simu.Start();
 		sim.simu_step();

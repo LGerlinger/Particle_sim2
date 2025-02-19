@@ -7,8 +7,10 @@
 
 class Renderer {
 private :
-	sf::RenderWindow& window;
+	sf::RenderWindow* window;
+	sf::Event event;
 	sf::View view;
+	uint16_t FPS_limit = 60;
 
 	Particle_simulator& particle_sim;
 	sf::VertexArray particle_vertices;
@@ -18,9 +20,12 @@ private :
 	sf::Color background = sf::Color::Black;
 
 public :
-	Renderer(sf::RenderWindow& window_, Particle_simulator& particle_sim_);
+	Renderer(Particle_simulator& particle_sim_);
 	~Renderer();
 
+	bool render = true;
+
+	void start_rendering();
 	void update_display();
 	void update_particle_vertices();
 	void update_segment_vertices();

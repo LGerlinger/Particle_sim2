@@ -1,13 +1,16 @@
 #include <SFML/Graphics/Color.hpp>
 #include <SFML/Graphics/PrimitiveType.hpp>
+#include <SFML/Graphics/RenderWindow.hpp>
 #include <SFML/System/Vector2.hpp>
+#include <SFML/Window/Window.hpp>
+#include <chrono>
 #include <iostream>
 
 #include "Renderer.hpp"
 
 
-Renderer::Renderer(sf::RenderWindow& window_, Particle_simulator& particle_sim_) : 
-	window(window_), particle_sim(particle_sim_)
+Renderer::Renderer(Particle_simulator& particle_sim_) : 
+	particle_sim(particle_sim_)
 {
 	std::cout << "Renderer::Renderer()" << std::endl;
 
@@ -43,16 +46,29 @@ Renderer::Renderer(sf::RenderWindow& window_, Particle_simulator& particle_sim_)
 Renderer::~Renderer() {
 	std::cout << "Renderer::~Renderer()" << std::endl;
 	particle_vertices.clear();
+	segment_vertices.clear();
 }
 
+void Renderer::start_rendering() {
+	window = new sf::RenderWindow(sf::VideoMode(1800, 1000), "Particle sim");
+	while (render) {
+		while (window->pollEvent(event)) {}
+		update_display();
+		std::this_thread::sleep_for(std::chrono::microseconds(1000000 / FPS_limit));
+	}
+}
+
+
 void Renderer::update_display() {
-	// std::cout << "Renderer::update_display" << std::endl;
-	window.clear(background);
+// std::cout << "Renderer::update_display" << std::endl;
+	window->clear(background);
+	// particle_sim.particle_mutex.lock();
 	update_particle_vertices();
 	update_segment_vertices();
-	window.draw(particle_vertices, &particle_texture);
-	window.draw(segment_vertices);
-	window.display();
+	// particle_sim.particle_mutex.unlock();
+	window->draw(particle_vertices, &particle_texture);
+	window->draw(segment_vertices);
+	window->display();
 }
 
 
@@ -64,11 +80,12 @@ void Renderer::update_particle_vertices() {
 	// 	 particle_sim.radii,		(float)(particle_sim.radii / sqrt(3)),
 	// 	-particle_sim.radii,		(float)(particle_sim.radii / sqrt(3))
 	// };
+	float pr = 1; // padding_ratio
 	float quad[4][2] = {
-		-particle_sim.radii,	-particle_sim.radii,
-		 particle_sim.radii,	-particle_sim.radii,
-		 particle_sim.radii,	 particle_sim.radii,
-		-particle_sim.radii,	 particle_sim.radii,
+		-particle_sim.radii *pr,	-particle_sim.radii *pr,
+		 particle_sim.radii *pr,	-particle_sim.radii *pr,
+		 particle_sim.radii *pr,	 particle_sim.radii *pr,
+		-particle_sim.radii *pr,	 particle_sim.radii *pr,
 	};
 	
 	for (uint32_t p=0; p<particle_sim.nb_active_part; p++) {
