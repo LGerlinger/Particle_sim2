@@ -64,15 +64,34 @@ Particle_simulator::Particle_simulator() : world(1800, 1000, 4*radii, 4*radii) {
 }
 
 
-void Particle_simulator::start_simulation_threads() {
-	sync_count = 0;
-		for (uint8_t i=0; i<MAX_THREAD_NUM; i++) {
-			thread_list[i] = new std::thread(&Particle_simulator::simulation_thread, this, i);
-		}
+Particle_simulator::~Particle_simulator() {
+	if (threads_created) {
 		for (uint8_t i=0; i<MAX_THREAD_NUM; i++) {
 			thread_list[i]->join();
+			delete(thread_list[i]);
 		}
-	// }
+	}
+}
+
+
+void Particle_simulator::start_simulation_threads() {
+	sync_count = 0;
+	for (uint8_t i=0; i<MAX_THREAD_NUM; i++) {
+		thread_list[i] = new std::thread(&Particle_simulator::simulation_thread, this, i);
+	}
+	threads_created = true;
+}
+
+void Particle_simulator::stop_simulation_threads() {
+	// std::cout << "Particle_simulator::stop_simulation_threads" << std::endl;
+	simulate = false;
+	pthread_cond_broadcast(&sync_condition); // Done to make sure no thread is waiting at the simulation synchronisation stop
+	for (uint8_t i=0; i<MAX_THREAD_NUM; i++) {
+		thread_list[i]->join();
+		thread_list[i] = nullptr;
+	}
+	threads_created = false;
+	// std::cout << "Particle_simulator::stop_simulation_threads fini" << std::endl;
 }
 
 
@@ -86,9 +105,12 @@ void Particle_simulator::simulation_thread(uint8_t th_id) {
 		sync_count++;
 		if (sync_count == MAX_THREAD_NUM) { // dernier thread à arriver à la synchro
 			sync_count = 0;
+			while (simulate && paused && !step) {
+				std::this_thread::sleep_for(std::chrono::milliseconds(10));
+			}
+			step = false;
 
 			world.update_grid_particle_contenance(particle_array, nb_active_part);
-			// std::this_thread::sleep_for(std::chrono::milliseconds(1));
 
 			pthread_cond_broadcast(&sync_condition);
 
@@ -102,6 +124,20 @@ void Particle_simulator::simulation_thread(uint8_t th_id) {
 		for (uint32_t p=nppt *th_id; p<nppt *(th_id+1); p++) {
 			particle_array[p].acceleration[0] = 0;
 			particle_array[p].acceleration[1] = 0;
+			
+			if ((bool)appliedForce) {
+				switch (appliedForce) {
+					case userForce::Translation:
+						attraction(p);
+						break;
+					case userForce::Rotation:
+						rotation(p);
+						break;
+					case userForce::Vortex:
+						vortex(p);
+						break;
+        }
+			}
 
 			// point_gravity(p);
 			gravity(p);
@@ -380,11 +416,41 @@ void Particle_simulator::static_friction(uint32_t pn) {
 
 
 void Particle_simulator::fluid_friction(uint32_t pn) {
-	float vec[2];
-	float norm;
+	particle_array[pn].speed[0] *= 1-0.1f*dt;
+	particle_array[pn].speed[1] *= 1-0.1f*dt;
+}
 
-	particle_array[pn].speed[0] *= 1-0.2f*dt;
-	particle_array[pn].speed[1] *= 1-0.2f*dt;
+
+
+inline void Particle_simulator::attraction(uint32_t pn) {
+	float vec[2] = {
+		user_point[0] - particle_array[pn].position[0],
+		user_point[1] - particle_array[pn].position[1]
+	};
+	float norm = translation_force / sqrt(vec[0]*vec[0] + vec[1]*vec[1]);
+	particle_array[pn].acceleration[0] += vec[0] * norm;
+	particle_array[pn].acceleration[1] += vec[1] * norm;
+}
+
+inline void Particle_simulator::rotation(uint32_t pn) {
+	float vec[2] = {
+		-user_point[1] + particle_array[pn].position[1],
+		 user_point[0] - particle_array[pn].position[0]
+	};
+	float norm = rotation_force / sqrt(vec[0]*vec[0] + vec[1]*vec[1]);
+	particle_array[pn].acceleration[0] += vec[0] * norm;
+	particle_array[pn].acceleration[1] += vec[1] * norm;
+}
+
+inline void Particle_simulator::vortex(uint32_t pn) {
+	float vec[2] = {
+		user_point[0] - particle_array[pn].position[0],
+		user_point[1] - particle_array[pn].position[1]
+	};
+	float norm = sqrt(vec[0]*vec[0] + vec[1]*vec[1]);
+	particle_array[pn].acceleration[0] += (vec[0]*translation_force - vec[1]*rotation_force) / norm;
+	particle_array[pn].acceleration[1] += (vec[1]*translation_force + vec[1]*rotation_force) / norm;
+
 }
 
 

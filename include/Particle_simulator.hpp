@@ -31,15 +31,19 @@ public :
 
 	// Simulation multi-threading
 	std::thread* thread_list[MAX_THREAD_NUM];
+	bool threads_created = false;
 	bool simulate = true;
+	bool paused = false;
+	bool step = false;
 	pthread_mutex_t sync_mutex = PTHREAD_MUTEX_INITIALIZER;
 	pthread_cond_t sync_condition = PTHREAD_COND_INITIALIZER;
 	uint8_t sync_count;
 
 	Particle_simulator();
-	~Particle_simulator() = default;
+	~Particle_simulator();
 
 	void start_simulation_threads();
+	void stop_simulation_threads();
 	void simulation_thread(uint8_t th_id);
 	void simu_step();
 
@@ -55,6 +59,16 @@ public :
 	inline void point_gravity(uint32_t pn);
 	inline void static_friction(uint32_t pn);
 	inline void fluid_friction(uint32_t pn);
+
+	// User forces
+	enum class userForce {None = 0, Translation, Rotation, Vortex};
+	userForce appliedForce = userForce::None;
+	float user_point[2];
+	float translation_force = 2000;
+	float rotation_force = 1000;
+	inline void attraction(uint32_t pn);
+	inline void rotation(uint32_t pn);
+	inline void vortex(uint32_t pn);
 
 	inline void solver(uint32_t pn);
 };

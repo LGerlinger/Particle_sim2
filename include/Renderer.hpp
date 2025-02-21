@@ -5,12 +5,12 @@
 
 #include "Particle_simulator.hpp"
 
+
 class Renderer {
 private :
-	sf::RenderWindow* window;
-	sf::Event event;
-	sf::View view;
-	uint16_t FPS_limit = 60;
+	sf::RenderWindow& window;
+	sf::View worldView;
+	// sf::View UIView;
 
 	Particle_simulator& particle_sim;
 	sf::VertexArray particle_vertices;
@@ -20,13 +20,15 @@ private :
 	sf::Color background = sf::Color::Black;
 
 public :
-	Renderer(Particle_simulator& particle_sim_);
+	Renderer(Particle_simulator& particle_sim_, sf::RenderWindow& window_);
 	~Renderer();
 
-	bool render = true;
+	uint16_t FPS_limit = 60;
 
-	void start_rendering();
 	void update_display();
 	void update_particle_vertices();
 	void update_segment_vertices();
+
+	inline sf::View& getworldView() {return worldView;};
+	// inline sf::View& getUIView() {return UIView;};
 };

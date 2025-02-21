@@ -1,5 +1,7 @@
+#include "EventHandler.hpp"
 #include "Renderer.hpp"
 
+#include <SFML/Graphics/View.hpp>
 #include <chrono>
 #include <cstdint>
 #include <iostream>
@@ -26,16 +28,13 @@ int main() {
 	
 	Particle_simulator sim;
 
-	Renderer renderer(sim);
-	bool& keep_rendering = renderer.render;
-	std::thread render_thread(&Renderer::start_rendering, &renderer);
-	std::this_thread::sleep_for(std::chrono::milliseconds(1000));
+	sf::RenderWindow window(sf::VideoMode(1800, 1000), "Particle sim");
+	Renderer renderer(sim, window);
+
+	EventHandler eventHandler(renderer, window, sim);
+	EventOrders eventOrders = eventHandler.getOrders();
 
 	sim.start_simulation_threads();
-	render_thread.join();
-	return 0;
-
-	// I need to make the main thread continue but It shall do for now
 
 	Consometre conso_tot;
 	Consometre conso_simu;
@@ -43,26 +42,25 @@ int main() {
 	uint32_t nb_frames = 0;
 
 	uint32_t i=0;
-	while (true) {
-
+	while (window.isOpen()) {
 		conso_tot.Start();
-		// std::this_thread::sleep_for(std::chrono::milliseconds(10));
-
-		conso_simu.Start();
-		sim.simu_step();
-		conso_simu.End();
-
+		
+		eventHandler.loopOverEvents();
+		renderer.update_display();
+		std::this_thread::sleep_for(std::chrono::microseconds(1000000/renderer.FPS_limit));
+		
+		// nb_frames++;
+		// if (conso_tot.count() > Consometre::NB_TICK_SEC) { // 1s passed
+		// 	std::cout << "FPS : " << nb_frames << std::endl;
+		// 	std::cout << "Conso simu : " << (float)conso_simu.count() / nb_frames / 1000000 << "ms (" << (float)conso_simu.count() / conso_tot.count() *100 << " %)\t\tConso render : " << (float)conso_render.count() / nb_frames / 1000000 << " ms (" << (float)conso_render.count() / conso_tot.count() *100 << " %)" << std::endl;
+		// 	conso_tot.setZero();
+		// 	conso_render.setZero();
+		// 	conso_simu.setZero();
+		// 	nb_frames = 0;
+		// }
 		conso_tot.End();
-		nb_frames++;
-		if (conso_tot.count() > Consometre::NB_TICK_SEC) {
-			std::cout << "FPS : " << nb_frames << std::endl;
-			std::cout << "Conso simu : " << (float)conso_simu.count() / nb_frames / 1000000 << "ms (" << (float)conso_simu.count() / conso_tot.count() *100 << " %)\t\tConso render : " << (float)conso_render.count() / nb_frames / 1000000 << " ms (" << (float)conso_render.count() / conso_tot.count() *100 << " %)" << std::endl;
-			conso_tot.setZero();
-			conso_render.setZero();
-			conso_simu.setZero();
-			nb_frames = 0;
-		}
-
-
 	}
+
+	sim.stop_simulation_threads();
+	return 0;
 }

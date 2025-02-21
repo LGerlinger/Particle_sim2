@@ -4,7 +4,6 @@
 #include "Segment.hpp"
 
 #include <cstdint>
-#include <vector>
 
 struct Cell {
 	uint8_t nb_parts;
