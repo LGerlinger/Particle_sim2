@@ -1,5 +1,6 @@
 #include "EventHandler.hpp"
 #include "Particle_simulator.hpp"
+
 #include <iostream>
 
 
@@ -80,9 +81,9 @@ void EventHandler::loopOverEvents() {
 				
 				case sf::Mouse::Left :
 					sf::Vector2i pixelPos = sf::Mouse::getPosition(window);
-					// sf::Vector2f worldPos = window.mapPixelToCoords(sf::Vector2i(event.mouseButton.x, event.mouseButton.y));
 					sf::Vector2f worldPos = window.mapPixelToCoords(pixelPos);
-					simulator.appliedForce = Particle_simulator::userForce::Translation;
+					// simulator.appliedForce = Particle_simulator::userForce::Vortex_ranged;
+					simulator.deletion_order = true;
 					simulator.user_point[0] = worldPos.x;
 					simulator.user_point[1] = worldPos.y;
 
@@ -127,7 +128,9 @@ void EventHandler::loopOverEvents() {
 			rightMousePressed = false;
 		}
 			if (event.mouseButton.button == sf::Mouse::Left) {
-				simulator.appliedForce = Particle_simulator::userForce::None;
+				// simulator.appliedForce = Particle_simulator::userForce::None;
+				simulator.deletion_order = false;
+
 				// if (leftMousePressed) {
 				// 	leftMousePressed = false;
 

@@ -10,4 +10,6 @@ public :
 	uint8_t colour[4];
 
 	bool active;
+
+	void print();
 };

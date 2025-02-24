@@ -6,13 +6,15 @@
 #include <pthread.h> // I couldn't find a way to synchronize multiple threads with modern c++. Surely there's a way
 #include <semaphore.h>
 
+
+#include "Consometer.hpp"
 #include "Particle.hpp"
 #include "Segment.hpp"
 #include "World.hpp"
 
 
 
-#define NB_PART 10002
+#define NB_PART 12000
 #define MAX_THREAD_NUM 6
 
 class Particle_simulator {
@@ -46,29 +48,41 @@ public :
 	void stop_simulation_threads();
 	void simulation_thread(uint8_t th_id);
 	void simu_step();
+	void solver(uint32_t p_start, uint32_t p_end);
 
 	// Collisions
-	void collision_pp(uint32_t pn);
+	void collision_pp(uint32_t p_start, uint32_t p_end);
 	void collision_pp_grid();
-	void collision_pp_grid_threaded(uint32_t pn);
-	void collision_pl(uint32_t pn);
+	void collision_pp_grid_threaded(uint32_t p_start, uint32_t p_end);
+	void collision_pl(uint32_t p_start, uint32_t p_end);
 	
 	// General forces
-	inline void gravity(uint32_t pn);
+	void gravity(uint32_t p_start, uint32_t p_end);
 	float grav_center[2] = {1000, 500};
-	inline void point_gravity(uint32_t pn);
-	inline void static_friction(uint32_t pn);
-	inline void fluid_friction(uint32_t pn);
+	void point_gravity(uint32_t p_start, uint32_t p_end);
+	void static_friction(uint32_t p_start, uint32_t p_end);
+	void fluid_friction(uint32_t p_start, uint32_t p_end);
 
 	// User forces
-	enum class userForce {None = 0, Translation, Rotation, Vortex};
+	enum class userForce {None = 0, Translation, Translation_ranged, Rotation, Rotation_ranged, Vortex, Vortex_ranged};
 	userForce appliedForce = userForce::None;
 	float user_point[2];
-	float translation_force = 2000;
+	float translation_force = 3000;
 	float rotation_force = 1000;
-	inline void attraction(uint32_t pn);
-	inline void rotation(uint32_t pn);
-	inline void vortex(uint32_t pn);
+	float range = 200;
+	bool deletion_order = false;
+	void attraction(uint32_t p_start, uint32_t p_end);
+	void attraction_ranged(uint32_t p_start, uint32_t p_end);
+	void rotation(uint32_t p_start, uint32_t p_end);
+	void rotation_ranged(uint32_t p_start, uint32_t p_end);
+	void vortex(uint32_t p_start, uint32_t p_end);
+	void vortex_ranged(uint32_t p_start, uint32_t p_end);
 
-	inline void solver(uint32_t pn);
+
+	// Creation / deletion of particles
+	void delete_particle(uint32_t p);
+	void delete_range(float x, float y, float range_);
+
+	// perfomance check
+	Consometre conso;
 };

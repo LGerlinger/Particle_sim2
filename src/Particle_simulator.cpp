@@ -10,7 +10,7 @@
 #include "Particle.hpp"
 
 
-Particle_simulator::Particle_simulator() : world(1800, 1000, 4*radii, 4*radii) {
+Particle_simulator::Particle_simulator() : world(1800, 1000, 2*radii, 2*radii) {
 	std::cout << "Particle_simulator::Particle_simulator()" << std::endl;
 	// std::cout << "point gravity : " << grav_center[0] << ", " << grav_center[1] << std::endl;
 	for (uint32_t i=0; i<NB_PART; i++) {
@@ -97,7 +97,9 @@ void Particle_simulator::stop_simulation_threads() {
 
 void Particle_simulator::simulation_thread(uint8_t th_id) {
 	uint32_t nppt; // number of particles per thread
-	uint8_t inc = 0;
+	uint32_t p_start, p_end;
+	uint32_t inc = 0;
+	conso.start_perf_check("simulateur", 1000);
 	while (simulate) {
 		// Synchronisation
 		// std::cout << "lock thread id : " << (short)th_id << "  count=" << (short)sync_count << std::endl;
@@ -110,9 +112,14 @@ void Particle_simulator::simulation_thread(uint8_t th_id) {
 			}
 			step = false;
 
+			if (deletion_order) {
+				delete_range(user_point[0], user_point[1], range);
+			}
+
 			world.update_grid_particle_contenance(particle_array, nb_active_part);
 
 			pthread_cond_broadcast(&sync_condition);
+			conso.Tick_general();
 
 		} else { // not the last thread so wait
 			int ernum = pthread_cond_wait(&sync_condition, &sync_mutex);
@@ -120,75 +127,122 @@ void Particle_simulator::simulation_thread(uint8_t th_id) {
 		}
 		pthread_mutex_unlock(&sync_mutex);
 
+
+		// Simulation -- applying forces and collisions
 		nppt = nb_active_part/MAX_THREAD_NUM; // number of particles per thread
-		for (uint32_t p=nppt *th_id; p<nppt *(th_id+1); p++) {
+		p_start = nppt *th_id;
+		p_end =   nppt *(th_id+1);
+		if (nb_active_part == MAX_THREAD_NUM-1) p_end = nb_active_part;
+
+		for (uint32_t p=p_start; p<p_end; p++) {
 			particle_array[p].acceleration[0] = 0;
 			particle_array[p].acceleration[1] = 0;
-			
-			if ((bool)appliedForce) {
-				switch (appliedForce) {
-					case userForce::Translation:
-						attraction(p);
-						break;
-					case userForce::Rotation:
-						rotation(p);
-						break;
-					case userForce::Vortex:
-						vortex(p);
-						break;
-        }
-			}
-
-			// point_gravity(p);
-			gravity(p);
-			fluid_friction(p);
-			// static_friction(p);
-
-			// collision_pp(p);
-			collision_pp_grid_threaded(p);
-			collision_pl(p);
-
-			solver(p);
 		}
+
+		switch (appliedForce) {
+			case userForce::None:
+				break;
+			case userForce::Translation:
+				attraction(p_start, p_end);
+				break;
+			case userForce::Translation_ranged:
+				attraction_ranged(p_start, p_end);
+				break;
+			case userForce::Rotation:
+				rotation(p_start, p_end);
+				break;
+			case userForce::Rotation_ranged:
+				rotation_ranged(p_start, p_end);
+				break;
+			case userForce::Vortex:
+				vortex(p_start, p_end);
+				break;
+			case userForce::Vortex_ranged:
+				vortex_ranged(p_start, p_end);
+				break;
+		}
+
+		// point_gravity(p_start, p_end);
+		gravity(p_start, p_end);
+		// fluid_friction(p_start, p_end);
+		// static_friction(p_start, p_end);
+
+		// collision_pp(p_start, p_end);
+		collision_pp_grid_threaded(p_start, p_end);
+		collision_pl(p_start, p_end);
+
+		// Simulation -- displacement
+		solver(p_start, p_end);
 	}
 }
 
 
 void Particle_simulator::simu_step() {
 	// particle_mutex.lock();
-	for (uint32_t i=0; i<NB_PART; i++) {
+	for (uint32_t i=0; i<nb_active_part; i++) {
 		particle_array[i].acceleration[0] = 0;
 		particle_array[i].acceleration[1] = 0;
 	}
-	// collision_pp();
+
+	if ((bool)appliedForce) {
+		switch (appliedForce) {
+			case userForce::Translation:
+				attraction(0, nb_active_part);
+				break;
+			case userForce::Rotation:
+				rotation(0, nb_active_part);
+				break;
+			case userForce::Vortex:
+				vortex(0, nb_active_part);
+				break;
+		}
+	}
+	// gravity(0, nb_active_part);
+	point_gravity(0, nb_active_part);
+
 	world.update_grid_particle_contenance(particle_array, nb_active_part);
+	// collision_pp(0, nb_active_part);
+	collision_pp_grid_threaded(0, nb_active_part);
+	collision_pl(0, nb_active_part);
+
 	// collision_pp_grid();
-	// collision_pl();
-	// particle_mutex.unlock();
+	solver(0, nb_active_part);
 }
 
-void Particle_simulator::collision_pp(uint32_t pn) {
+
+void Particle_simulator::solver(uint32_t p_start, uint32_t p_end) {
+	for (uint32_t p=p_start; p<p_end; p++) {
+		particle_array[p].speed[0] += particle_array[p].acceleration[0] * dt;
+		particle_array[p].speed[1] += particle_array[p].acceleration[1] * dt;
+	
+		particle_array[p].position[0] += particle_array[p].speed[0] * dt;
+		particle_array[p].position[1] += particle_array[p].speed[1] * dt;
+	}
+}
+
+
+void Particle_simulator::collision_pp(uint32_t p_start, uint32_t p_end) {
 	float vec[2];
 	float dist;
 	float collision_coef = 0.45f;
-	for (uint8_t i=0; i<4; i++) {
-		for (uint32_t p2=pn+1; p2<NB_PART; p2++) {
-			vec[0] = particle_array[p2].position[0] + particle_array[p2].speed[0]*dt - particle_array[pn].position[0] - particle_array[pn].speed[0]*dt;
-			vec[1] = particle_array[p2].position[1] + particle_array[p2].speed[1]*dt - particle_array[pn].position[1] - particle_array[pn].speed[1]*dt;
-			dist = sqrt(vec[0]*vec[0] + vec[1]*vec[1]);
-			vec[0] /= dist;
-			vec[1] /= dist;
+	for (uint8_t i=0; i<2; i++) {
+		for (uint32_t p1=p_start; p1<p_end; p1++) {
 
-			if (dist < 2*radii) {
-				// particle_array[pn].acceleration[0] -= vec[0] * (2*radii - dist) /dt/dt *collision_coef;
-				// particle_array[pn].acceleration[1] -= vec[1] * (2*radii - dist) /dt/dt *collision_coef;
-				// particle_array[p2].acceleration[0] += vec[0] * (2*radii - dist) /dt/dt *collision_coef;
-				// particle_array[p2].acceleration[1] += vec[1] * (2*radii - dist) /dt/dt *collision_coef;
-				particle_array[pn].speed[0] -= vec[0] * (2*radii - dist) /dt *collision_coef;
-				particle_array[pn].speed[1] -= vec[1] * (2*radii - dist) /dt *collision_coef;
-				particle_array[p2].speed[0] += vec[0] * (2*radii - dist) /dt *collision_coef;
-				particle_array[p2].speed[1] += vec[1] * (2*radii - dist) /dt *collision_coef;
+			for (uint32_t p2=p1+1; p2<nb_active_part; p2++) {
+				vec[0] = particle_array[p2].position[0] + particle_array[p2].speed[0]*dt - particle_array[p1].position[0] - particle_array[p1].speed[0]*dt;
+				vec[1] = particle_array[p2].position[1] + particle_array[p2].speed[1]*dt - particle_array[p1].position[1] - particle_array[p1].speed[1]*dt;
+				dist = sqrt(vec[0]*vec[0] + vec[1]*vec[1]);
+				vec[0] /= dist;
+				vec[1] /= dist;
+	
+				if (dist < 2*radii) {
+					particle_array[p1].speed[0] -= vec[0] * (2*radii - dist) /dt *collision_coef;
+					particle_array[p1].speed[1] -= vec[1] * (2*radii - dist) /dt *collision_coef;
+					particle_array[p2].speed[0] += vec[0] * (2*radii - dist) /dt *collision_coef;
+					particle_array[p2].speed[1] += vec[1] * (2*radii - dist) /dt *collision_coef;
+				}
 			}
+
 		}
 	}
 }
@@ -229,10 +283,6 @@ void Particle_simulator::collision_pp_grid() {
 											vec[1] /= dist;
 								
 											if (dist < 2*radii) {
-												// particle_array[p1].acceleration[0] -= vec[0] * (2*radii - dist) /dt/dt *collision_coef;
-												// particle_array[p1].acceleration[1] -= vec[1] * (2*radii - dist) /dt/dt *collision_coef;
-												// particle_array[p2].acceleration[0] += vec[0] * (2*radii - dist) /dt/dt *collision_coef;
-												// particle_array[p2].acceleration[1] += vec[1] * (2*radii - dist) /dt/dt *collision_coef;
 												particle_array[part1].speed[0] -= vec[0] * (2*radii - dist) /dt *collision_coef;
 												particle_array[part1].speed[1] -= vec[1] * (2*radii - dist) /dt *collision_coef;
 												particle_array[part2].speed[0] += vec[0] * (2*radii - dist) /dt *collision_coef;
@@ -253,54 +303,55 @@ void Particle_simulator::collision_pp_grid() {
 }
 
 
-void Particle_simulator::collision_pp_grid_threaded(uint32_t pn) {
+void Particle_simulator::collision_pp_grid_threaded(uint32_t p_start, uint32_t p_end) {
 	// std::cout << "========== Particle_simulator::collision_pp_grid_threaded ==========" << std::endl;
 	uint16_t dPos[2];
 	float vec[2];
 	float dist;
 	float collision_coef = 0.45f;
 	uint32_t part2;
+	uint16_t x, y;
 	for (uint8_t i=0; i<2; i++) {
-		uint16_t x = particle_array[pn].position[0] / world.cellSize[0];
-		uint16_t y = particle_array[pn].position[1] / world.cellSize[1];
-		// if (pn < 10) std::cout << "p1 = " << pn << ",  cell1 [" << x << ", " << y << "] size :" << (short)world.getCell(x, y).nb_parts << std::endl;
+		for (uint32_t p1=p_start; p1<p_end; p1++) {
 
-
-		for (int8_t dy=0; dy<2; dy++) {
-			dPos[1] = y + dy;
-			if (dPos[1] < world.gridSize[1]) {
-				for (int8_t dx=-dy; dx<2; dx++) {
-					dPos[0] = x + dx;
-					if (dPos[0] < world.gridSize[0]) {
+			x = particle_array[p1].position[0] / world.cellSize[0];
+			y = particle_array[p1].position[1] / world.cellSize[1];
+			// if (p1 < 10) std::cout << "p1 = " << p1 << ",  cell1 [" << x << ", " << y << "] size :" << (short)world.getCell(x, y).nb_parts << std::endl;
+	
+	
+			for (int8_t dy=0; dy<2; dy++) {
+				dPos[1] = y + dy;
+				if (dPos[1] < world.gridSize[1]) {
+					for (int8_t dx=-dy; dx<2; dx++) {
+						dPos[0] = x + dx;
+						if (dPos[0] < world.gridSize[0]) {
+							
+							// std::cout << "\tcell2 [" << dPos[0] << ", " << dPos[1] << "], size :" << (short)world.getCell(dPos[0], dPos[1]).nb_parts << std::endl;
+							for (uint16_t p2=0; p2<world.getCell(dPos[0], dPos[1]).nb_parts; p2++) {
+								part2 = world.getCell(dPos[0], dPos[1]).parts[p2];
+								// std::cout << "\t\t" << part2 << std::endl;
+								if (p1 != part2) {
+	
+									vec[0] = particle_array[part2].position[0] + particle_array[part2].speed[0]*dt - particle_array[p1].position[0] - particle_array[p1].speed[0]*dt;
+									vec[1] = particle_array[part2].position[1] + particle_array[part2].speed[1]*dt - particle_array[p1].position[1] - particle_array[p1].speed[1]*dt;
+									dist = sqrt(vec[0]*vec[0] + vec[1]*vec[1]);
+									vec[0] /= dist;
+									vec[1] /= dist;
 						
-						// std::cout << "\tcell2 [" << dPos[0] << ", " << dPos[1] << "], size :" << (short)world.getCell(dPos[0], dPos[1]).nb_parts << std::endl;
-						for (uint16_t p2=0; p2<world.getCell(dPos[0], dPos[1]).nb_parts; p2++) {
-							part2 = world.getCell(dPos[0], dPos[1]).parts[p2];
-							// std::cout << "\t\t" << part2 << std::endl;
-							if (pn != part2) {
-
-								vec[0] = particle_array[part2].position[0] + particle_array[part2].speed[0]*dt - particle_array[pn].position[0] - particle_array[pn].speed[0]*dt;
-								vec[1] = particle_array[part2].position[1] + particle_array[part2].speed[1]*dt - particle_array[pn].position[1] - particle_array[pn].speed[1]*dt;
-								dist = sqrt(vec[0]*vec[0] + vec[1]*vec[1]);
-								vec[0] /= dist;
-								vec[1] /= dist;
-					
-								if (dist < 2*radii) {
-									// particle_array[p1].acceleration[0] -= vec[0] * (2*radii - dist) /dt/dt *collision_coef;
-									// particle_array[p1].acceleration[1] -= vec[1] * (2*radii - dist) /dt/dt *collision_coef;
-									// particle_array[p2].acceleration[0] += vec[0] * (2*radii - dist) /dt/dt *collision_coef;
-									// particle_array[p2].acceleration[1] += vec[1] * (2*radii - dist) /dt/dt *collision_coef;
-									particle_array[pn].speed[0] -= vec[0] * (2*radii - dist) /dt *collision_coef;
-									particle_array[pn].speed[1] -= vec[1] * (2*radii - dist) /dt *collision_coef;
-									particle_array[part2].speed[0] += vec[0] * (2*radii - dist) /dt *collision_coef;
-									particle_array[part2].speed[1] += vec[1] * (2*radii - dist) /dt *collision_coef;
+									if (dist < 2*radii) {
+										particle_array[p1].speed[0] -= vec[0] * (2*radii - dist) /dt *collision_coef;
+										particle_array[p1].speed[1] -= vec[1] * (2*radii - dist) /dt *collision_coef;
+										particle_array[part2].speed[0] += vec[0] * (2*radii - dist) /dt *collision_coef;
+										particle_array[part2].speed[1] += vec[1] * (2*radii - dist) /dt *collision_coef;
+									}
 								}
 							}
+	
 						}
-
 					}
 				}
 			}
+
 		}
 					
 	}
@@ -308,7 +359,7 @@ void Particle_simulator::collision_pp_grid_threaded(uint32_t pn) {
 
 
 
-void Particle_simulator::collision_pl(uint32_t pn) {
+void Particle_simulator::collision_pl(uint32_t p_start, uint32_t p_end) {
 	float vec[2];
 	float AB[2], AC[2];
 	float AB_dim[2];
@@ -328,8 +379,7 @@ void Particle_simulator::collision_pl(uint32_t pn) {
 		min[1] = std::min(seg_array[s].pos[0][1], seg_array[s].pos[1][1]);
 		max[1] = std::max(seg_array[s].pos[0][1], seg_array[s].pos[1][1]);
 
-		// for (uint32_t p=0; p<nb_active_part; p++) {
-		uint32_t p= pn;
+		for (uint32_t p=p_start; p<p_end; p++) {
 			part_next_pos[0] = particle_array[p].position[0] + particle_array[p].speed[0]*dt;
 			part_next_pos[1] = particle_array[p].position[1] + particle_array[p].speed[1]*dt;
 
@@ -372,98 +422,175 @@ void Particle_simulator::collision_pl(uint32_t pn) {
 					}
 				}
 			}
+		}
 
-
-
-		// }
 	}
 }
 
 
 
-void Particle_simulator::gravity(uint32_t pn) {
-	particle_array[pn].acceleration[1] += 1000;
+void Particle_simulator::gravity(uint32_t p_start, uint32_t p_end) {
+	for (uint32_t p=p_start; p<p_end; p++) {
+		particle_array[p].acceleration[1] += 1000;
+	}
 }
 
-void Particle_simulator::point_gravity(uint32_t pn) {
+void Particle_simulator::point_gravity(uint32_t p_start, uint32_t p_end) {
 	float vec[2];
 	float dist;
 	float temp;
-	
-	vec[0] = grav_center[0] - particle_array[pn].position[0];
-	vec[1] = grav_center[1] - particle_array[pn].position[1];
-	dist = sqrt(vec[0]*vec[0] + vec[1]*vec[1]);
-	temp = atan(dist) / dist;
-	temp = temp * temp;
-	vec[0] *= dist*temp;
-	vec[1] *= dist*temp;
 
-	particle_array[pn].acceleration[0] += vec[0] * 1000;
-	particle_array[pn].acceleration[1] += vec[1] * 1000;
+	for (uint32_t p=p_start; p<p_end; p++) {
+		vec[0] = grav_center[0] - particle_array[p].position[0];
+		vec[1] = grav_center[1] - particle_array[p].position[1];
+		dist = sqrt(vec[0]*vec[0] + vec[1]*vec[1]);
+		temp = atan(dist) / dist;
+		temp = temp * temp;
+		vec[0] *= dist*temp;
+		vec[1] *= dist*temp;
+	
+		particle_array[p].acceleration[0] += vec[0] * 1000;
+		particle_array[p].acceleration[1] += vec[1] * 1000;
+	}
 }
 
 
-void Particle_simulator::static_friction(uint32_t pn) {
+void Particle_simulator::static_friction(uint32_t p_start, uint32_t p_end) {
 	float vec[2];
 	float norm;
 
-	vec[0] = particle_array[pn].speed[0];
-	vec[1] = particle_array[pn].speed[1];
-	norm = sqrt(vec[0]*vec[0] + vec[1]*vec[1]);
-	particle_array[pn].speed[0] = (norm<1) ? 0 : particle_array[pn].speed[0];
-	particle_array[pn].speed[1] = (norm<1) ? 0 : particle_array[pn].speed[1];
+	for (uint32_t p=p_start; p<p_end; p++) {
+		vec[0] = particle_array[p].speed[0];
+		vec[1] = particle_array[p].speed[1];
+		norm = sqrt(vec[0]*vec[0] + vec[1]*vec[1]);
+		particle_array[p].speed[0] = (norm<1) ? 0 : particle_array[p].speed[0];
+		particle_array[p].speed[1] = (norm<1) ? 0 : particle_array[p].speed[1];
+	}
 }
 
 
-void Particle_simulator::fluid_friction(uint32_t pn) {
-	particle_array[pn].speed[0] *= 1-0.1f*dt;
-	particle_array[pn].speed[1] *= 1-0.1f*dt;
+void Particle_simulator::fluid_friction(uint32_t p_start, uint32_t p_end) {
+	for (uint32_t p=p_start; p<p_end; p++) {
+		particle_array[p].speed[0] *= 1-0.1f*dt;
+		particle_array[p].speed[1] *= 1-0.1f*dt;
+	}
 }
 
 
 
-inline void Particle_simulator::attraction(uint32_t pn) {
-	float vec[2] = {
-		user_point[0] - particle_array[pn].position[0],
-		user_point[1] - particle_array[pn].position[1]
-	};
-	float norm = translation_force / sqrt(vec[0]*vec[0] + vec[1]*vec[1]);
-	particle_array[pn].acceleration[0] += vec[0] * norm;
-	particle_array[pn].acceleration[1] += vec[1] * norm;
+void Particle_simulator::attraction(uint32_t p_start, uint32_t p_end) {
+	float vec[2], norm;
+	for (uint32_t p=p_start; p<p_end; p++) {
+		vec[0] = user_point[0] - particle_array[p].position[0];
+		vec[1] = user_point[1] - particle_array[p].position[1];
+		norm = translation_force / sqrt(vec[0]*vec[0] + vec[1]*vec[1]);
+		
+		particle_array[p].acceleration[0] += vec[0] * norm;
+		particle_array[p].acceleration[1] += vec[1] * norm;
+	}
 }
 
-inline void Particle_simulator::rotation(uint32_t pn) {
-	float vec[2] = {
-		-user_point[1] + particle_array[pn].position[1],
-		 user_point[0] - particle_array[pn].position[0]
-	};
-	float norm = rotation_force / sqrt(vec[0]*vec[0] + vec[1]*vec[1]);
-	particle_array[pn].acceleration[0] += vec[0] * norm;
-	particle_array[pn].acceleration[1] += vec[1] * norm;
+void Particle_simulator::attraction_ranged(uint32_t p_start, uint32_t p_end) {
+	float vec[2], norm;
+	for (uint32_t p=p_start; p<p_end; p++) {
+		vec[0] = user_point[0] - particle_array[p].position[0];
+		vec[1] = user_point[1] - particle_array[p].position[1];
+		norm = sqrt(vec[0]*vec[0] + vec[1]*vec[1]);
+
+		if (norm < range) {
+			particle_array[p].acceleration[0] += vec[0] * translation_force / norm;
+			particle_array[p].acceleration[1] += vec[1] * translation_force / norm;
+		}
+	}
 }
 
-inline void Particle_simulator::vortex(uint32_t pn) {
-	float vec[2] = {
-		user_point[0] - particle_array[pn].position[0],
-		user_point[1] - particle_array[pn].position[1]
-	};
-	float norm = sqrt(vec[0]*vec[0] + vec[1]*vec[1]);
-	particle_array[pn].acceleration[0] += (vec[0]*translation_force - vec[1]*rotation_force) / norm;
-	particle_array[pn].acceleration[1] += (vec[1]*translation_force + vec[1]*rotation_force) / norm;
+void Particle_simulator::rotation(uint32_t p_start, uint32_t p_end) {
+	float vec[2], norm;
+	for (uint32_t p=p_start; p<p_end; p++) {
+		vec[0] = -user_point[1] + particle_array[p].position[1];
+		vec[1] =  user_point[0] - particle_array[p].position[0];
+		norm = rotation_force / sqrt(vec[0]*vec[0] + vec[1]*vec[1]);
 
+		particle_array[p].acceleration[0] += vec[0] * norm;
+		particle_array[p].acceleration[1] += vec[1] * norm;
+	}
+}
+
+void Particle_simulator::rotation_ranged(uint32_t p_start, uint32_t p_end) {
+	float vec[2], norm;
+	for (uint32_t p=p_start; p<p_end; p++) {
+		vec[0] = -user_point[1] + particle_array[p].position[1];
+		vec[1] =  user_point[0] - particle_array[p].position[0];
+		norm = sqrt(vec[0]*vec[0] + vec[1]*vec[1]);
+
+		if (norm < range) {
+			particle_array[p].acceleration[0] += vec[0] * rotation_force / norm;
+			particle_array[p].acceleration[1] += vec[1] * rotation_force / norm;
+		}
+	}
+}
+
+void Particle_simulator::vortex(uint32_t p_start, uint32_t p_end) {
+	float vec[2], norm;
+	for (uint32_t p=p_start; p<p_end; p++) {
+		vec[0] = user_point[0] - particle_array[p].position[0];
+		vec[1] = user_point[1] - particle_array[p].position[1];
+		float norm = sqrt(vec[0]*vec[0] + vec[1]*vec[1]);
+
+		particle_array[p].acceleration[0] += (vec[0]*translation_force - vec[1]*rotation_force) / norm;
+		particle_array[p].acceleration[1] += (vec[1]*translation_force + vec[1]*rotation_force) / norm;
+	}
+}
+
+void Particle_simulator::vortex_ranged(uint32_t p_start, uint32_t p_end) {
+	float vec[2], norm;
+	for (uint32_t p=p_start; p<p_end; p++) {
+		vec[0] = user_point[0] - particle_array[p].position[0];
+		vec[1] = user_point[1] - particle_array[p].position[1];
+		float norm = sqrt(vec[0]*vec[0] + vec[1]*vec[1]);
+
+		if (norm < range) {
+			particle_array[p].acceleration[0] += (vec[0]*translation_force - vec[1]*rotation_force) / norm;
+			particle_array[p].acceleration[1] += (vec[1]*translation_force + vec[1]*rotation_force) / norm;
+		}
+	}
 }
 
 
-void Particle_simulator::solver(uint32_t pn) {
-	// if (pn==0) {
-	// 	std::cout << "acceleration : " << particle_array[pn].acceleration[0] << "," << particle_array[pn].acceleration[1] << std::endl;
-	// 	std::cout << "speed : " << particle_array[pn].speed[0] << "," << particle_array[pn].speed[1] << std::endl;
-	// 	std::cout << "position : " << particle_array[pn].position[0] << "," << particle_array[pn].position[1] << std::endl;
-	// 	std::cout << std::endl;
-	// }
-	particle_array[pn].speed[0] += particle_array[pn].acceleration[0] * dt;
-	particle_array[pn].speed[1] += particle_array[pn].acceleration[1] * dt;
+void Particle_simulator::delete_particle(uint32_t p) {
+	particle_array[p].active = false;
+	Particle swap;
 
-	particle_array[pn].position[0] += particle_array[pn].speed[0] * dt;
-	particle_array[pn].position[1] += particle_array[pn].speed[1] * dt;
+	// std::cout << "\n\nDeletion =======" << std::endl;
+	// std::cout << "nb_active_parts = " << nb_active_part << std::endl;
+	// std::cout << p << " :" << std::endl;
+	// particle_array[p].print();
+	// std::cout << nb_active_part-1 << " :" << std::endl;
+	// particle_array[nb_active_part-1].print();
+
+	swap = particle_array[nb_active_part-1]; // Their order doesn't matter
+	particle_array[nb_active_part-1] = particle_array[p];
+	particle_array[p] = swap;
+
+	// std::cout << "\nAprès suppression" << std::endl;
+	// std::cout << p << " :" << std::endl;
+	// particle_array[p].print();
+	// std::cout << nb_active_part-1 << " :" << std::endl;
+	// particle_array[nb_active_part-1].print();
+
+	nb_active_part--;
+}
+
+void Particle_simulator::delete_range(float x, float y, float range_) {
+	float vec[2], norm;
+	for (uint32_t p=0; p<nb_active_part; p++) {
+		vec[0] = x - particle_array[p].position[0];
+		vec[1] = y - particle_array[p].position[1];
+		norm = sqrt(vec[0]*vec[0] + vec[1]*vec[1]);
+
+		if (norm < range) {
+			delete_particle(p);
+			p--;
+		}
+	}
 }

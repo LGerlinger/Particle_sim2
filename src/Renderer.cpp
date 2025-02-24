@@ -1,6 +1,8 @@
+#include <cmath>
 #include <iostream>
 
 #include "Renderer.hpp"
+#include "Particle_simulator.hpp"
 
 
 Renderer::Renderer(Particle_simulator& particle_sim_, sf::RenderWindow& window_) : 
@@ -84,8 +86,11 @@ void Renderer::update_particle_vertices() {
 			particle_vertices[4*p+i].color.g = particle_sim.particle_array[p].colour[1];
 			particle_vertices[4*p+i].color.b = particle_sim.particle_array[p].colour[2];
 			particle_vertices[4*p+i].color.a = particle_sim.particle_array[p].colour[3];
-
-			// particle_vertices[4*p+i].color.a = 150;
+		}
+	}
+	for (uint32_t p=particle_sim.nb_active_part; p<NB_PART; p++) {
+		for (uint8_t i=0; i<4; i++) {
+			particle_vertices[4*p+i].color.a = 0;
 		}
 	}
 }
