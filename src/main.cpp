@@ -12,7 +12,7 @@ int main() {
 	
 	Particle_simulator sim;
 
-	sf::RenderWindow window(sf::VideoMode(1800, 1000), "Particle sim");
+	sf::RenderWindow window(sf::VideoMode(1000, 1000), "Particle sim");
 	Renderer renderer(sim, window);
 
 	EventHandler eventHandler(renderer, window, sim);

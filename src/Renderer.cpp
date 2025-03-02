@@ -13,7 +13,7 @@ Renderer::Renderer(Particle_simulator& particle_sim_, sf::RenderWindow& window_)
 
 	// Initializing Particle VertexArray
 	particle_vertices.setPrimitiveType(sf::Quads);
-	particle_vertices.resize(4*particle_sim.nb_active_part);
+	particle_vertices.resize(4*NB_PART);
 
 	if (particle_texture.loadFromFile("disk128x128.png")) {
 		sf::Vector2u texSize = particle_texture.getSize();
@@ -24,7 +24,7 @@ Renderer::Renderer(Particle_simulator& particle_sim_, sf::RenderWindow& window_)
 		  0,									(float)texSize.y
 		};
 
-		for (uint32_t p=0; p<particle_sim.nb_active_part; p++) {
+		for (uint32_t p=0; p<NB_PART; p++) {
 			for (uint8_t i=0; i<4; i++) {
 				particle_vertices[4*p+i].texCoords.x = quad[i][0];
 				particle_vertices[4*p+i].texCoords.y = quad[i][1];
@@ -38,6 +38,7 @@ Renderer::Renderer(Particle_simulator& particle_sim_, sf::RenderWindow& window_)
 	// Initializing Segment VertexArray
 	segment_vertices.setPrimitiveType(sf::Lines);
 	segment_vertices.resize(2*particle_sim.nb_active_seg);
+	// std::cout << "fin Renderer::Renderer()" << std::endl;
 }
 
 Renderer::~Renderer() {

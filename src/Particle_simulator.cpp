@@ -4,6 +4,7 @@
 #include <cstdint>
 #include <cstdlib>
 #include <iostream>
+#include <pthread.h>
 #include <semaphore.h>
 
 #include "Particle_simulator.hpp"
@@ -12,7 +13,6 @@
 
 Particle_simulator::Particle_simulator() : world(1800, 1000, 2*radii, 2*radii) {
 	std::cout << "Particle_simulator::Particle_simulator()" << std::endl;
-	// std::cout << "point gravity : " << grav_center[0] << ", " << grav_center[1] << std::endl;
 	for (uint32_t i=0; i<NB_PART; i++) {
 		particle_array[i].position[0] = rand()%1800;
 		particle_array[i].position[1] = rand()%1000;
@@ -61,10 +61,12 @@ Particle_simulator::Particle_simulator() : world(1800, 1000, 2*radii, 2*radii) {
 	seg_array[5].pos[0][1] = 300;
 	seg_array[5].pos[1][0] = 700;
 	seg_array[5].pos[1][1] = 800;
+	std::cout << "fin Particle_simulator::Particle_simulator()" << std::endl;
 }
 
 
 Particle_simulator::~Particle_simulator() {
+	std::cout << "Particle_simulator::~Particle_simulator()" << std::endl;
 	if (threads_created) {
 		for (uint8_t i=0; i<MAX_THREAD_NUM; i++) {
 			thread_list[i]->join();
@@ -75,6 +77,7 @@ Particle_simulator::~Particle_simulator() {
 
 
 void Particle_simulator::start_simulation_threads() {
+	// std::cout << "Particle_simulator::start_simulation_threads()" << std::endl;
 	sync_count = 0;
 	for (uint8_t i=0; i<MAX_THREAD_NUM; i++) {
 		thread_list[i] = new std::thread(&Particle_simulator::simulation_thread, this, i);
@@ -83,7 +86,7 @@ void Particle_simulator::start_simulation_threads() {
 }
 
 void Particle_simulator::stop_simulation_threads() {
-	// std::cout << "Particle_simulator::stop_simulation_threads" << std::endl;
+	// std::cout << "Particle_simulator::stop_simulation_threads()" << std::endl;
 	simulate = false;
 	pthread_cond_broadcast(&sync_condition); // Done to make sure no thread is waiting at the simulation synchronisation stop
 	for (uint8_t i=0; i<MAX_THREAD_NUM; i++) {
@@ -91,14 +94,13 @@ void Particle_simulator::stop_simulation_threads() {
 		thread_list[i] = nullptr;
 	}
 	threads_created = false;
-	// std::cout << "Particle_simulator::stop_simulation_threads fini" << std::endl;
 }
 
 
 void Particle_simulator::simulation_thread(uint8_t th_id) {
+	// std::cout << "Particle_simulator::simulation_thread()" << std::endl;
 	uint32_t nppt; // number of particles per thread
 	uint32_t p_start, p_end;
-	uint32_t inc = 0;
 	conso.start_perf_check("simulateur", 1000);
 	while (simulate) {
 		// Synchronisation
@@ -112,11 +114,24 @@ void Particle_simulator::simulation_thread(uint8_t th_id) {
 			}
 			step = false;
 
-			if (deletion_order) {
-				delete_range(user_point[0], user_point[1], range);
-			}
+			// This part is executed by only one thread while others wait
+			{
+				time[0] += dt;
+	
+				if (deletion_order) {
+					delete_range(user_point[0], user_point[1], range);
+				}
+				if (0.05f < time[0] - time[1]) {
+					time[1] = time[0];
+					uint32_t pa = create_particle(world.size[0]/2-200, 100);
+					uint32_t pb = create_particle(world.size[0]/2+200, 100);
 
-			world.update_grid_particle_contenance(particle_array, nb_active_part);
+					if (pa != (uint32_t)-1) particle_array[pa].speed[0] =  300;
+					if (pb != (uint32_t)-1) particle_array[pb].speed[0] =  -300;
+				}
+
+				world.update_grid_particle_contenance(particle_array, nb_active_part);
+			}
 
 			pthread_cond_broadcast(&sync_condition);
 			conso.Tick_general();
@@ -129,10 +144,9 @@ void Particle_simulator::simulation_thread(uint8_t th_id) {
 
 
 		// Simulation -- applying forces and collisions
-		nppt = nb_active_part/MAX_THREAD_NUM; // number of particles per thread
-		p_start = nppt *th_id;
-		p_end =   nppt *(th_id+1);
-		if (nb_active_part == MAX_THREAD_NUM-1) p_end = nb_active_part;
+		nppt = nb_active_part/MAX_THREAD_NUM; // number of particles per thread +- 1
+		p_start = nppt *th_id       + std::min(th_id, (uint8_t)(nb_active_part%MAX_THREAD_NUM));
+		p_end =   nppt *(th_id+1)   + std::min(th_id, (uint8_t)(nb_active_part%MAX_THREAD_NUM)) + (th_id < (uint8_t)(nb_active_part%MAX_THREAD_NUM));
 
 		for (uint32_t p=p_start; p<p_end; p++) {
 			particle_array[p].acceleration[0] = 0;
@@ -178,6 +192,7 @@ void Particle_simulator::simulation_thread(uint8_t th_id) {
 
 
 void Particle_simulator::simu_step() {
+	// std::cout << "Particle_simulator::simu_step()" << std::endl;
 	// particle_mutex.lock();
 	for (uint32_t i=0; i<nb_active_part; i++) {
 		particle_array[i].acceleration[0] = 0;
@@ -211,6 +226,7 @@ void Particle_simulator::simu_step() {
 
 
 void Particle_simulator::solver(uint32_t p_start, uint32_t p_end) {
+	// std::cout << "Particle_simulator::solver()" << std::endl;
 	for (uint32_t p=p_start; p<p_end; p++) {
 		particle_array[p].speed[0] += particle_array[p].acceleration[0] * dt;
 		particle_array[p].speed[1] += particle_array[p].acceleration[1] * dt;
@@ -222,6 +238,7 @@ void Particle_simulator::solver(uint32_t p_start, uint32_t p_end) {
 
 
 void Particle_simulator::collision_pp(uint32_t p_start, uint32_t p_end) {
+	// std::cout << "Particle_simulator::collision_pp()" << std::endl;
 	float vec[2];
 	float dist;
 	float collision_coef = 0.45f;
@@ -249,6 +266,7 @@ void Particle_simulator::collision_pp(uint32_t p_start, uint32_t p_end) {
 
 
 void Particle_simulator::collision_pp_grid() {
+	// std::cout << "Particle_simulator::collision_pp_grid()" << std::endl;
 	// std::cout << "========== Particle_simulator::collision_pp_grid ==========" << std::endl;
 	uint16_t dPos[2];
 	float vec[2];
@@ -304,6 +322,7 @@ void Particle_simulator::collision_pp_grid() {
 
 
 void Particle_simulator::collision_pp_grid_threaded(uint32_t p_start, uint32_t p_end) {
+	// std::cout << "Particle_simulator::collision_pp_grid_threaded()" << std::endl;
 	// std::cout << "========== Particle_simulator::collision_pp_grid_threaded ==========" << std::endl;
 	uint16_t dPos[2];
 	float vec[2];
@@ -360,6 +379,7 @@ void Particle_simulator::collision_pp_grid_threaded(uint32_t p_start, uint32_t p
 
 
 void Particle_simulator::collision_pl(uint32_t p_start, uint32_t p_end) {
+	// std::cout << "Particle_simulator::collision_pl()" << std::endl;
 	float vec[2];
 	float AB[2], AC[2];
 	float AB_dim[2];
@@ -430,12 +450,14 @@ void Particle_simulator::collision_pl(uint32_t p_start, uint32_t p_end) {
 
 
 void Particle_simulator::gravity(uint32_t p_start, uint32_t p_end) {
+	// std::cout << "Particle_simulator::gravity()" << std::endl;
 	for (uint32_t p=p_start; p<p_end; p++) {
 		particle_array[p].acceleration[1] += 1000;
 	}
 }
 
 void Particle_simulator::point_gravity(uint32_t p_start, uint32_t p_end) {
+	// std::cout << "Particle_simulator::point_gravity()" << std::endl;
 	float vec[2];
 	float dist;
 	float temp;
@@ -456,6 +478,7 @@ void Particle_simulator::point_gravity(uint32_t p_start, uint32_t p_end) {
 
 
 void Particle_simulator::static_friction(uint32_t p_start, uint32_t p_end) {
+	// std::cout << "Particle_simulator::static_friction()" << std::endl;
 	float vec[2];
 	float norm;
 
@@ -470,6 +493,7 @@ void Particle_simulator::static_friction(uint32_t p_start, uint32_t p_end) {
 
 
 void Particle_simulator::fluid_friction(uint32_t p_start, uint32_t p_end) {
+	// std::cout << "Particle_simulator::fluid_friction()" << std::endl;
 	for (uint32_t p=p_start; p<p_end; p++) {
 		particle_array[p].speed[0] *= 1-0.1f*dt;
 		particle_array[p].speed[1] *= 1-0.1f*dt;
@@ -479,6 +503,7 @@ void Particle_simulator::fluid_friction(uint32_t p_start, uint32_t p_end) {
 
 
 void Particle_simulator::attraction(uint32_t p_start, uint32_t p_end) {
+	// std::cout << "Particle_simulator::attraction()" << std::endl;
 	float vec[2], norm;
 	for (uint32_t p=p_start; p<p_end; p++) {
 		vec[0] = user_point[0] - particle_array[p].position[0];
@@ -491,6 +516,7 @@ void Particle_simulator::attraction(uint32_t p_start, uint32_t p_end) {
 }
 
 void Particle_simulator::attraction_ranged(uint32_t p_start, uint32_t p_end) {
+	// std::cout << "Particle_simulator::attraction_ranged()" << std::endl;
 	float vec[2], norm;
 	for (uint32_t p=p_start; p<p_end; p++) {
 		vec[0] = user_point[0] - particle_array[p].position[0];
@@ -505,6 +531,7 @@ void Particle_simulator::attraction_ranged(uint32_t p_start, uint32_t p_end) {
 }
 
 void Particle_simulator::rotation(uint32_t p_start, uint32_t p_end) {
+	// std::cout << "Particle_simulator::rotation()" << std::endl;
 	float vec[2], norm;
 	for (uint32_t p=p_start; p<p_end; p++) {
 		vec[0] = -user_point[1] + particle_array[p].position[1];
@@ -517,6 +544,7 @@ void Particle_simulator::rotation(uint32_t p_start, uint32_t p_end) {
 }
 
 void Particle_simulator::rotation_ranged(uint32_t p_start, uint32_t p_end) {
+	// std::cout << "Particle_simulator::rotation_ranged()" << std::endl;
 	float vec[2], norm;
 	for (uint32_t p=p_start; p<p_end; p++) {
 		vec[0] = -user_point[1] + particle_array[p].position[1];
@@ -531,6 +559,7 @@ void Particle_simulator::rotation_ranged(uint32_t p_start, uint32_t p_end) {
 }
 
 void Particle_simulator::vortex(uint32_t p_start, uint32_t p_end) {
+	// std::cout << "Particle_simulator::vortex()" << std::endl;
 	float vec[2], norm;
 	for (uint32_t p=p_start; p<p_end; p++) {
 		vec[0] = user_point[0] - particle_array[p].position[0];
@@ -543,6 +572,7 @@ void Particle_simulator::vortex(uint32_t p_start, uint32_t p_end) {
 }
 
 void Particle_simulator::vortex_ranged(uint32_t p_start, uint32_t p_end) {
+	// std::cout << "Particle_simulator::vortex_ranged()" << std::endl;
 	float vec[2], norm;
 	for (uint32_t p=p_start; p<p_end; p++) {
 		vec[0] = user_point[0] - particle_array[p].position[0];
@@ -558,7 +588,7 @@ void Particle_simulator::vortex_ranged(uint32_t p_start, uint32_t p_end) {
 
 
 void Particle_simulator::delete_particle(uint32_t p) {
-	particle_array[p].active = false;
+	// std::cout << "Particle_simulator::delete_particle()" << std::endl;
 	Particle swap;
 
 	// std::cout << "\n\nDeletion =======" << std::endl;
@@ -582,6 +612,7 @@ void Particle_simulator::delete_particle(uint32_t p) {
 }
 
 void Particle_simulator::delete_range(float x, float y, float range_) {
+	// std::cout << "Particle_simulator::delete_range()" << std::endl;
 	float vec[2], norm;
 	for (uint32_t p=0; p<nb_active_part; p++) {
 		vec[0] = x - particle_array[p].position[0];
@@ -592,5 +623,24 @@ void Particle_simulator::delete_range(float x, float y, float range_) {
 			delete_particle(p);
 			p--;
 		}
+	}
+}
+
+
+uint32_t Particle_simulator::create_particle(float x, float y) {
+	// std::cout << "Particle_simulator::create_particle(), nb_actif=" << nb_active_part << std::endl;
+	if (nb_active_part < NB_PART) {
+		particle_array[nb_active_part].position[0] = x;
+		particle_array[nb_active_part].position[1] = y;
+
+		particle_array[nb_active_part].speed[0] = 0;
+		particle_array[nb_active_part].speed[1] = 0;
+		particle_array[nb_active_part].acceleration[0] = 0;
+		particle_array[nb_active_part].acceleration[1] = 0;
+
+		return nb_active_part++;
+
+	} else {
+		return (uint32_t)-1;
 	}
 }

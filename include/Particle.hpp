@@ -9,7 +9,5 @@ public :
 	float acceleration[2];
 	uint8_t colour[4];
 
-	bool active;
-
 	void print();
 };

@@ -56,16 +56,17 @@ void EventHandler::loopOverEvents() {
 		case sf::Event::MouseWheelScrolled:
 			mouseWheelDelta = event.mouseWheelScroll.delta;
 			coef = mouseWheelDelta > 0 ? 0.8f : 1.25f;
-			worldView.zoom(coef);
-			// centre doit se d�caler de coef * vecteur centre -> souris
+			// centre doit se décaler de coef * vecteur centre -> souris
 			mousePos = mouse.getPosition(window);
 			center = worldView.getCenter();
-			windowSize = window.getSize();
-			viewSize = worldView.getSize();
+			// windowSize = window.getSize();
+			// viewSize = worldView.getSize();
 			worldView.setCenter(
 				center.x + (1-coef) * ((float)mousePos.x - windowSize.x / 2) * viewSize.x / windowSize.x,
 				center.y + (1-coef) * ((float)mousePos.y - windowSize.y / 2) * viewSize.y / windowSize.y
 			);
+			worldView.zoom(coef);
+			viewSize = worldView.getSize();
 
 			break;
 
@@ -148,8 +149,8 @@ void EventHandler::loopOverEvents() {
 
 		// event type
 		case sf::Event::MouseMoved:
-			windowSize = window.getSize();
-			viewSize = worldView.getSize();
+			// windowSize = window.getSize();
+			// viewSize = worldView.getSize();
 			// if (mouse.isButtonPressed(sf::Mouse::Right)) {
 			if (rightMousePressed) {
 				worldView.setCenter(
@@ -183,6 +184,21 @@ void EventHandler::loopOverEvents() {
 				// }
 			}
 			break;
+
+		case sf::Event::Resized:
+			// viewSize = worldView.getSize();
+			worldView.setCenter(
+				worldView.getCenter().x + (event.size.width -  (float)windowSize.x) * viewSize.x / (2*windowSize.x),
+				worldView.getCenter().y + (event.size.height - (float)windowSize.y) * viewSize.y / (2*windowSize.y)
+			);
+			worldView.setSize(
+				viewSize.x * event.size.width  / windowSize.x,
+				viewSize.y * event.size.height / windowSize.y
+			);
+			windowSize = window.getSize();
+			viewSize = worldView.getSize();
+			break;
+
 		case sf::Event::Closed:
 			window.close();
 			break;

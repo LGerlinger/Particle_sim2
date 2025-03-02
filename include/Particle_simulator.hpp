@@ -14,7 +14,7 @@
 
 
 
-#define NB_PART 12000
+#define NB_PART 6000
 #define MAX_THREAD_NUM 6
 
 class Particle_simulator {
@@ -23,11 +23,12 @@ public :
 	float radii = 4;
 	float dt = 0.002;
 	
-	uint32_t nb_active_part = NB_PART;
+	uint32_t nb_active_part = NB_PART/2;
 	Particle particle_array[NB_PART];
 	std::mutex particle_mutex;
 	uint32_t nb_active_seg = 6;
 	Segment seg_array[6];
+	float time[2] = {0, 0};
 
 	World world;
 
@@ -82,6 +83,7 @@ public :
 	// Creation / deletion of particles
 	void delete_particle(uint32_t p);
 	void delete_range(float x, float y, float range_);
+	uint32_t create_particle(float x, float y);
 
 	// perfomance check
 	Consometre conso;
