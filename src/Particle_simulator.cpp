@@ -61,7 +61,7 @@ Particle_simulator::Particle_simulator() : world(1800, 1000, 2*radii, 2*radii) {
 	seg_array[5].pos[0][1] = 300;
 	seg_array[5].pos[1][0] = 700;
 	seg_array[5].pos[1][1] = 800;
-	std::cout << "fin Particle_simulator::Particle_simulator()" << std::endl;
+	// std::cout << "fin Particle_simulator::Particle_simulator()" << std::endl;
 }
 
 
@@ -121,13 +121,19 @@ void Particle_simulator::simulation_thread(uint8_t th_id) {
 				if (deletion_order) {
 					delete_range(user_point[0], user_point[1], range);
 				}
-				if (0.05f < time[0] - time[1]) {
+				if (0.01f * radii < time[0] - time[1]) {
 					time[1] = time[0];
 					uint32_t pa = create_particle(world.size[0]/2-200, 100);
 					uint32_t pb = create_particle(world.size[0]/2+200, 100);
 
-					if (pa != (uint32_t)-1) particle_array[pa].speed[0] =  300;
-					if (pb != (uint32_t)-1) particle_array[pb].speed[0] =  -300;
+					if (pa != (uint32_t)-1) {
+						particle_array[pa].speed[0] =  800 * cos(-2*time[0]);
+						particle_array[pa].speed[1] =  800 * sin(-2*time[0]);
+					}
+					if (pb != (uint32_t)-1) {
+						particle_array[pb].speed[0] = -800 * cos(-2*time[0]);
+						particle_array[pb].speed[1] =  800 * sin(-2*time[0]);
+					}
 				}
 
 				world.update_grid_particle_contenance(particle_array, nb_active_part);
@@ -183,7 +189,9 @@ void Particle_simulator::simulation_thread(uint8_t th_id) {
 
 		// collision_pp(p_start, p_end);
 		collision_pp_grid_threaded(p_start, p_end);
+		// collision_pp_glue(p_start, p_end);
 		collision_pl(p_start, p_end);
+		world_borders(p_start, p_end);
 
 		// Simulation -- displacement
 		solver(p_start, p_end);
@@ -199,19 +207,20 @@ void Particle_simulator::simu_step() {
 		particle_array[i].acceleration[1] = 0;
 	}
 
-	if ((bool)appliedForce) {
-		switch (appliedForce) {
-			case userForce::Translation:
-				attraction(0, nb_active_part);
-				break;
-			case userForce::Rotation:
-				rotation(0, nb_active_part);
-				break;
-			case userForce::Vortex:
-				vortex(0, nb_active_part);
-				break;
-		}
+	switch (appliedForce) {
+		case userForce::Translation:
+			attraction(0, nb_active_part);
+			break;
+		case userForce::Rotation:
+			rotation(0, nb_active_part);
+			break;
+		case userForce::Vortex:
+			vortex(0, nb_active_part);
+			break;
+		case userForce::None:
+			break;
 	}
+
 	// gravity(0, nb_active_part);
 	point_gravity(0, nb_active_part);
 
@@ -447,6 +456,96 @@ void Particle_simulator::collision_pl(uint32_t p_start, uint32_t p_end) {
 	}
 }
 
+
+inline float dot(float vec1[2], float vec2[2]) {
+	return vec1[0]*vec2[0] + vec1[1]*vec2[1];
+}
+
+void Particle_simulator::collision_pp_glue(uint32_t p_start, uint32_t p_end) {
+	uint16_t dPos[2];
+	float vec[2];
+	float speed_vec[2];
+	float dist;
+	float collision_coef = 0.45f;
+	// float dist_offset = 1.2f;
+	float force_coef = 10.f;
+	uint32_t part2;
+	uint16_t x, y;
+	float res;
+	for (uint8_t i=0; i<2; i++) {
+		for (uint32_t p1=p_start; p1<p_end; p1++) {
+
+			x = particle_array[p1].position[0] / world.cellSize[0];
+			y = particle_array[p1].position[1] / world.cellSize[1];
+			// if (p1 < 10) std::cout << "p1 = " << p1 << ",  cell1 [" << x << ", " << y << "] size :" << (short)world.getCell(x, y).nb_parts << std::endl;
+
+
+			for (int8_t dy=0; dy<2; dy++) {
+				dPos[1] = y + dy;
+				if (dPos[1] < world.gridSize[1]) {
+					for (int8_t dx=-dy; dx<2; dx++) {
+						dPos[0] = x + dx;
+						if (dPos[0] < world.gridSize[0]) {
+							
+							// std::cout << "\tcell2 [" << dPos[0] << ", " << dPos[1] << "], size :" << (short)world.getCell(dPos[0], dPos[1]).nb_parts << std::endl;
+							for (uint16_t p2=0; p2<world.getCell(dPos[0], dPos[1]).nb_parts; p2++) {
+								part2 = world.getCell(dPos[0], dPos[1]).parts[p2];
+								// std::cout << "\t\t" << part2 << std::endl;
+								if (p1 != part2) {
+	
+									vec[0] = particle_array[part2].position[0] + particle_array[part2].speed[0]*dt - particle_array[p1].position[0] - particle_array[p1].speed[0]*dt;
+									vec[1] = particle_array[part2].position[1] + particle_array[part2].speed[1]*dt - particle_array[p1].position[1] - particle_array[p1].speed[1]*dt;
+									dist = sqrt(vec[0]*vec[0] + vec[1]*vec[1]);
+									vec[0] /= dist;
+									vec[1] /= dist;
+
+									if (dist < 2*radii) {
+										particle_array[p1].speed[0] -= vec[0] * (2*radii - dist) /dt *collision_coef;
+										particle_array[p1].speed[1] -= vec[1] * (2*radii - dist) /dt *collision_coef;
+										particle_array[part2].speed[0] += vec[0] * (2*radii - dist) /dt *collision_coef;
+										particle_array[part2].speed[1] += vec[1] * (2*radii - dist) /dt *collision_coef;
+									}
+									else if (dist < 2*radii*1.2f) {
+										dist /= 2*radii;
+
+										// Speed at which 2 is going relatively to 1
+										speed_vec[0] = particle_array[part2].speed[0] - particle_array[p1].speed[0];
+										speed_vec[1] = particle_array[part2].speed[1] - particle_array[p1].speed[1];
+
+										res = force_coef * std::abs(dot(speed_vec, vec));
+
+										particle_array[p1].acceleration[0] += vec[0] * res;
+										particle_array[p1].acceleration[1] += vec[1] * res;
+										particle_array[part2].acceleration[0] -= vec[0] * res;
+										particle_array[part2].acceleration[1] -= vec[1] * res;
+									}
+								}
+							}
+	
+						}
+					}
+				}
+			}
+
+		}
+					
+	}
+}
+
+
+void Particle_simulator::world_borders(uint32_t p_start, uint32_t p_end) {
+	float vec[2];
+	for (uint32_t p1=p_start; p1<p_end; p1++) {
+		for (uint8_t i=0; i<2; i++) {
+			vec[i] = particle_array[p1].position[i] + particle_array[p1].speed[i]*dt;
+			if (vec[i] < radii) {
+				particle_array[p1].acceleration[i] += (radii - vec[i]) /dt /dt;
+			} else if (world.size[i] - radii < vec[i]) {
+				particle_array[p1].acceleration[i] -= (vec[i] - (world.size[i] - radii)) /dt /dt;
+			}
+		}
+	}
+}
 
 
 void Particle_simulator::gravity(uint32_t p_start, uint32_t p_end) {

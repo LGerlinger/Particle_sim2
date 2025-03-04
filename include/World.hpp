@@ -5,11 +5,14 @@
 
 #include <cstdint>
 
+#define MAX_PART_CELL 4
+#define MAX_SEG_CELL 4
+
 struct Cell {
 	uint8_t nb_parts;
 	uint8_t nb_segs;
-	uint32_t parts[50];
-	uint32_t segs[20];
+	uint32_t parts[MAX_PART_CELL];
+	uint32_t segs[MAX_SEG_CELL];
 };
 
 class World {

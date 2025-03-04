@@ -14,7 +14,7 @@
 
 
 
-#define NB_PART 6000
+#define NB_PART 12000
 #define MAX_THREAD_NUM 6
 
 class Particle_simulator {
@@ -23,7 +23,7 @@ public :
 	float radii = 4;
 	float dt = 0.002;
 	
-	uint32_t nb_active_part = NB_PART/2;
+	uint32_t nb_active_part = NB_PART;
 	Particle particle_array[NB_PART];
 	std::mutex particle_mutex;
 	uint32_t nb_active_seg = 6;
@@ -56,6 +56,8 @@ public :
 	void collision_pp_grid();
 	void collision_pp_grid_threaded(uint32_t p_start, uint32_t p_end);
 	void collision_pl(uint32_t p_start, uint32_t p_end);
+	void collision_pp_glue(uint32_t p_start, uint32_t p_end);
+	void world_borders(uint32_t p_start, uint32_t p_end);
 	
 	// General forces
 	void gravity(uint32_t p_start, uint32_t p_end);

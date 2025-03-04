@@ -32,7 +32,8 @@ void World::update_grid_particle_contenance(Particle* particle_array, uint32_t a
 				0 <= particle_array[i].position[1] && particle_array[i].position[1] < size[1]) {
 			// std::cout << "particle " << i << " pos=[" << particle_array[i].position[0] << ", " << particle_array[i].position[1] << "] ,\taccessing [" << (uint16_t)(particle_array[i].position[0]/cellSize[0]) << ", " << (uint16_t)(particle_array[i].position[1]/cellSize[1]) << "]" << std::endl;
 			Cell& cell = getCell((uint16_t)(particle_array[i].position[0]/cellSize[0]), (uint16_t)(particle_array[i].position[1]/cellSize[1]));
-			cell.parts[cell.nb_parts++] = i;
+			cell.parts[cell.nb_parts] = i;
+			cell.nb_parts = (cell.nb_parts+1) %MAX_PART_CELL;
 		}
 	}
 }
@@ -56,7 +57,9 @@ void World::update_grid_segment_contenance(Segment* segment_array, uint32_t arra
 			uint16_t max = segment_array[i].pos[0][1] > segment_array[i].pos[1][1] ? segment_array[i].pos[0][1] : segment_array[i].pos[1][1];
 			uint16_t x = segment_array[i].pos[0][0] / cellSize[0];
 			for (uint16_t y=min; y<max; y++) {
-				getCell(x, y).segs[getCell(x, y).nb_segs++] = i;
+				Cell& cell = getCell(x, y);
+				cell.segs[getCell(x, y).nb_segs] = i;
+				cell.nb_segs = (cell.nb_segs+1) % MAX_SEG_CELL;
 			}
 		}
 		else if (vec[1] == 0) { // horizontal line
@@ -64,7 +67,9 @@ void World::update_grid_segment_contenance(Segment* segment_array, uint32_t arra
 			uint16_t max = segment_array[i].pos[0][0] > segment_array[i].pos[1][0] ? segment_array[i].pos[0][0] : segment_array[i].pos[1][0];
 			uint16_t y = segment_array[i].pos[0][1] / cellSize[1];
 			for (uint16_t x=min; x<max; x++) {
-				getCell(x, y).segs[getCell(x, y).nb_segs++] = i;
+				Cell& cell = getCell(x, y);
+				cell.segs[getCell(x, y).nb_segs] = i;
+				cell.nb_segs = (cell.nb_segs+1) % MAX_SEG_CELL;
 			}
 		}
 		else {
