@@ -16,6 +16,7 @@
 
 #define NB_PART 12000
 #define MAX_THREAD_NUM 6
+#define NULLPART (uint32_t)-1
 
 class Particle_simulator {
 public :

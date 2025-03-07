@@ -30,6 +30,7 @@ int main() {
 		conso_this_thread.Start();
 		{
 			eventHandler.loopOverEvents();
+			eventHandler.update_selection_pos();
 			renderer.update_display();
 		}
 		conso_this_thread.End();
@@ -38,7 +39,6 @@ int main() {
 		
 		nb_frames++;
 		if (clock.count() > Consometre::NB_TICK_SEC) { // 1s passed
-			// 	std::cout << "Conso simu : " << (float)conso_simu.count() / nb_frames / 1000000 << "ms (" << (float)conso_simu.count() / conso_tot.count() *100 << " %)\t\tConso render : " << (float)conso_render.count() / nb_frames / 1000000 << " ms (" << (float)conso_render.count() / conso_tot.count() *100 << " %)" << std::endl;
 			std::cout << "FPS : " << nb_frames << std::endl;
 			clock.setZero();
 			nb_frames = 0;

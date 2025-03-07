@@ -9,5 +9,6 @@ public :
 	float acceleration[2];
 	uint8_t colour[4];
 
+	void select(bool selection);
 	void print();
 };

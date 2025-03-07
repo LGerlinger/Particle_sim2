@@ -17,6 +17,26 @@ World::World(float sizeX, float sizeY, float cellSizeX, float cellSizeY) {
 }
 
 
+Cell* World::getCell_fromPos(float pos_x, float pos_y) {
+	if (0 <= pos_x && pos_x <= size[0] &&
+	    0 <= pos_y && pos_y <= size[1]) {
+		return &grid[(uint16_t)(pos_y/cellSize[1])*gridSize[0] + (uint16_t)(pos_x/cellSize[0])];
+	}
+	else return nullptr;
+}
+
+
+bool World::getCellCoord_fromPos(float pos_x, float pos_y, uint16_t* x, uint16_t* y) {
+	if (0 <= pos_x && pos_x <= size[0] &&
+	    0 <= pos_y && pos_y <= size[1]) {
+			*x = (uint16_t)(pos_x/cellSize[0]);
+			*y = (uint16_t)(pos_y/cellSize[1]);
+		return true;
+	}
+	else return false;
+}
+
+
 void World::update_grid_particle_contenance(Particle* particle_array, uint32_t array_size) {
 	// std::cout << "World::update_grid_particle_contenance" << std::endl;
 	// "Emptying" cells
@@ -73,7 +93,33 @@ void World::update_grid_segment_contenance(Segment* segment_array, uint32_t arra
 			}
 		}
 		else {
-
+			// this needs implementing
 		}
+	}
+}
+
+
+void World::change_cell_part(uint32_t part, float init_pos_x, float init_pos_y, float end_pos_x, float end_pos_y) {
+	Cell* cell = getCell_fromPos(init_pos_x, init_pos_y);
+	if (cell) {
+		uint8_t foundAt = -1;
+		for (uint8_t i=0; i<cell->nb_parts; i++) {
+			if (cell->parts[i] == part){
+				foundAt = i;
+				break;
+			}
+		}
+		if (foundAt != (uint8_t)-1) {
+			for (uint8_t i=foundAt+1; i<cell->nb_parts; i++) {
+				cell->parts[i-1] = cell->parts[i];
+			}
+			cell->nb_parts--;
+		}
+	}
+
+	cell = getCell_fromPos(end_pos_x, end_pos_y);
+	if (cell) {
+		cell->parts[cell->nb_parts] = part;
+		cell->nb_parts = (cell->nb_parts+1) %MAX_PART_CELL;
 	}
 }

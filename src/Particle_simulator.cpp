@@ -1,11 +1,8 @@
-#include <SFML/Graphics/Color.hpp>
 #include <algorithm>
 #include <cmath>
 #include <cstdint>
 #include <cstdlib>
 #include <iostream>
-#include <pthread.h>
-#include <semaphore.h>
 
 #include "Particle_simulator.hpp"
 #include "Particle.hpp"
@@ -79,6 +76,7 @@ Particle_simulator::~Particle_simulator() {
 void Particle_simulator::start_simulation_threads() {
 	// std::cout << "Particle_simulator::start_simulation_threads()" << std::endl;
 	sync_count = 0;
+	simulate = true;
 	for (uint8_t i=0; i<MAX_THREAD_NUM; i++) {
 		thread_list[i] = new std::thread(&Particle_simulator::simulation_thread, this, i);
 	}
@@ -107,12 +105,14 @@ void Particle_simulator::simulation_thread(uint8_t th_id) {
 		// std::cout << "lock thread id : " << (short)th_id << "  count=" << (short)sync_count << std::endl;
 		pthread_mutex_lock(&sync_mutex);
 		sync_count++;
-		if (sync_count == MAX_THREAD_NUM) { // dernier thread à arriver à la synchro
+		if (sync_count == MAX_THREAD_NUM) { // last thread to reache synchronisation stop
 			sync_count = 0;
+			conso.Tick_fine();
 			while (simulate && paused && !step) {
-				std::this_thread::sleep_for(std::chrono::milliseconds(10));
+				std::this_thread::sleep_for(std::chrono::milliseconds(50));
 			}
 			step = false;
+			conso.Start();
 
 			// This part is executed by only one thread while others wait
 			{
@@ -126,11 +126,11 @@ void Particle_simulator::simulation_thread(uint8_t th_id) {
 					uint32_t pa = create_particle(world.size[0]/2-200, 100);
 					uint32_t pb = create_particle(world.size[0]/2+200, 100);
 
-					if (pa != (uint32_t)-1) {
+					if (pa != NULLPART) {
 						particle_array[pa].speed[0] =  800 * cos(-2*time[0]);
 						particle_array[pa].speed[1] =  800 * sin(-2*time[0]);
 					}
-					if (pb != (uint32_t)-1) {
+					if (pb != NULLPART) {
 						particle_array[pb].speed[0] = -800 * cos(-2*time[0]);
 						particle_array[pb].speed[1] =  800 * sin(-2*time[0]);
 					}
@@ -140,7 +140,6 @@ void Particle_simulator::simulation_thread(uint8_t th_id) {
 			}
 
 			pthread_cond_broadcast(&sync_condition);
-			conso.Tick_general();
 
 		} else { // not the last thread so wait
 			int ernum = pthread_cond_wait(&sync_condition, &sync_mutex);
@@ -643,7 +642,6 @@ void Particle_simulator::rotation(uint32_t p_start, uint32_t p_end) {
 }
 
 void Particle_simulator::rotation_ranged(uint32_t p_start, uint32_t p_end) {
-	// std::cout << "Particle_simulator::rotation_ranged()" << std::endl;
 	float vec[2], norm;
 	for (uint32_t p=p_start; p<p_end; p++) {
 		vec[0] = -user_point[1] + particle_array[p].position[1];
@@ -740,6 +738,6 @@ uint32_t Particle_simulator::create_particle(float x, float y) {
 		return nb_active_part++;
 
 	} else {
-		return (uint32_t)-1;
+		return NULLPART;
 	}
 }
