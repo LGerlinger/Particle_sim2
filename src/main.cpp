@@ -3,6 +3,7 @@
 #include "Consometer.hpp"
 
 #include <SFML/Graphics/View.hpp>
+#include <SFML/Window.hpp>
 #include <cstdint>
 #include <iostream>
 
@@ -11,12 +12,10 @@
 int main() {
 	
 	Particle_simulator sim;
+	
+	Renderer renderer(sim);
 
-	sf::RenderWindow window(sf::VideoMode(1800, 1000), "Particle sim");
-	Renderer renderer(sim, window);
-
-	EventHandler eventHandler(renderer, window, sim);
-	EventOrders eventOrders = eventHandler.getOrders();
+	EventHandler eventHandler(renderer, sim);
 
 	sim.start_simulation_threads();
 
@@ -25,7 +24,7 @@ int main() {
 	uint32_t nb_frames = 0;
 
 	uint32_t i=0;
-	while (window.isOpen()) {
+	while (renderer.getWindow().isOpen()) {
 		clock.Start();
 		conso_this_thread.Start();
 		{
@@ -34,7 +33,7 @@ int main() {
 			renderer.update_display();
 		}
 		conso_this_thread.End();
-		std::this_thread::sleep_for(std::chrono::nanoseconds(Consometre::NB_TICK_SEC/renderer.FPS_limit) - conso_this_thread.Sum());
+		if (!renderer.getVSync()) std::this_thread::sleep_for(std::chrono::nanoseconds(Consometre::NB_TICK_SEC/renderer.FPS_limit) - conso_this_thread.getSum());
 		conso_this_thread.setZero();
 		
 		nb_frames++;

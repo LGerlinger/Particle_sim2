@@ -20,6 +20,7 @@ So this is kind of a revenge on this previous project and I hope to make a truly
 **+ :** x2 the simulation's timestep (long timesteps can make the simulation unstable)  
 **- :** /2 the simulation's timestep (shorter timesteps make the simulation more stable)  
 **suppr :** if some particles are selected : delete them
+**F :** toggles fullscreen
 
 **MOUSE**  
 **mouse wheel :** zoom / unzoom the view  
@@ -44,4 +45,4 @@ To apply a force or a deletion in a zone, first press the corresponding key then
 
 ## This program uses SFML
 
-The c++ program uses SFML. I think I used [this guide](https://www.sfml-dev.org/tutorials/2.6/start-linux.php) for the installation.
+The c++ program uses SFML 2.5.1. I think I used [this guide](https://www.sfml-dev.org/tutorials/2.6/start-linux.php) for the installation.

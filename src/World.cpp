@@ -1,6 +1,5 @@
 #include "World.hpp"
 #include <cmath>
-#include <cstdlib>
 #include <iostream>
 
 World::World(float sizeX, float sizeY, float cellSizeX, float cellSizeY) {
@@ -14,6 +13,10 @@ World::World(float sizeX, float sizeY, float cellSizeX, float cellSizeY) {
 	std::cout << "gridSize :[" << gridSize[0] << ", " << gridSize[1] << "]" << std::endl;
 
 	grid = (Cell*)malloc(gridSize[0]*gridSize[1]* sizeof(Cell));
+}
+
+World::~World() {
+	if (grid) free(grid);
 }
 
 
@@ -37,6 +40,11 @@ bool World::getCellCoord_fromPos(float pos_x, float pos_y, uint16_t* x, uint16_t
 }
 
 
+/**
+* @details Empty each Cell then add each Particle to the right Cell.
+* Another alternative would be to check for every Particle whether it belongs to a different Cell each time it moves.
+* But I chose this implementation for now. 
+*/
 void World::update_grid_particle_contenance(Particle* particle_array, uint32_t array_size) {
 	// std::cout << "World::update_grid_particle_contenance" << std::endl;
 	// "Emptying" cells
@@ -67,6 +75,7 @@ void World::update_grid_segment_contenance(Segment* segment_array, uint32_t arra
 		}
 	}
 
+	// Filling them
 	float vec[2];
 	for (uint32_t i=0; i<array_size; i++) {
 		vec[0] = segment_array[i].pos[1][0] - segment_array[i].pos[0][0];
@@ -102,6 +111,7 @@ void World::update_grid_segment_contenance(Segment* segment_array, uint32_t arra
 void World::change_cell_part(uint32_t part, float init_pos_x, float init_pos_y, float end_pos_x, float end_pos_y) {
 	Cell* cell = getCell_fromPos(init_pos_x, init_pos_y);
 	if (cell) {
+		// search the index of the Particle in the Cell
 		uint8_t foundAt = -1;
 		for (uint8_t i=0; i<cell->nb_parts; i++) {
 			if (cell->parts[i] == part){
@@ -109,7 +119,7 @@ void World::change_cell_part(uint32_t part, float init_pos_x, float init_pos_y, 
 				break;
 			}
 		}
-		if (foundAt != (uint8_t)-1) {
+		if (foundAt != (uint8_t)-1) { // If Particle is found in the Cell, remove it
 			for (uint8_t i=foundAt+1; i<cell->nb_parts; i++) {
 				cell->parts[i-1] = cell->parts[i];
 			}
@@ -117,6 +127,7 @@ void World::change_cell_part(uint32_t part, float init_pos_x, float init_pos_y, 
 		}
 	}
 
+	// Adding the Particle in the end Cell
 	cell = getCell_fromPos(end_pos_x, end_pos_y);
 	if (cell) {
 		cell->parts[cell->nb_parts] = part;

@@ -30,18 +30,18 @@ Particle_simulator::Particle_simulator() : world(1800, 1000, 2*radii, 2*radii) {
 	// Wolrd borders 
 	seg_array[0].pos[0][0] = 0;
 	seg_array[0].pos[0][1] = 0;
-	seg_array[0].pos[1][0] = 1800;
+	seg_array[0].pos[1][0] = world.getSize(0);
 	seg_array[0].pos[1][1] = 0;
 
 	seg_array[1].pos[0][0] = seg_array[0].pos[1][0];
 	seg_array[1].pos[0][1] = seg_array[0].pos[1][1];
-	seg_array[1].pos[1][0] = 1800;
-	seg_array[1].pos[1][1] = 1000;
+	seg_array[1].pos[1][0] = world.getSize(0);
+	seg_array[1].pos[1][1] = world.getSize(1);
 
 	seg_array[2].pos[0][0] = seg_array[1].pos[1][0];
 	seg_array[2].pos[0][1] = seg_array[1].pos[1][1];
 	seg_array[2].pos[1][0] = 0;
-	seg_array[2].pos[1][1] = 1000;
+	seg_array[2].pos[1][1] = world.getSize(1);
 
 	seg_array[3].pos[0][0] = seg_array[2].pos[1][0];
 	seg_array[3].pos[0][1] = seg_array[2].pos[1][1];
@@ -64,11 +64,9 @@ Particle_simulator::Particle_simulator() : world(1800, 1000, 2*radii, 2*radii) {
 
 Particle_simulator::~Particle_simulator() {
 	std::cout << "Particle_simulator::~Particle_simulator()" << std::endl;
+	simulate = false;
 	if (threads_created) {
-		for (uint8_t i=0; i<MAX_THREAD_NUM; i++) {
-			thread_list[i]->join();
-			delete(thread_list[i]);
-		}
+		stop_simulation_threads();
 	}
 }
 
@@ -89,6 +87,7 @@ void Particle_simulator::stop_simulation_threads() {
 	pthread_cond_broadcast(&sync_condition); // Done to make sure no thread is waiting at the simulation synchronisation stop
 	for (uint8_t i=0; i<MAX_THREAD_NUM; i++) {
 		thread_list[i]->join();
+		delete(thread_list[i]);
 		thread_list[i] = nullptr;
 	}
 	threads_created = false;
@@ -98,11 +97,10 @@ void Particle_simulator::stop_simulation_threads() {
 void Particle_simulator::simulation_thread(uint8_t th_id) {
 	// std::cout << "Particle_simulator::simulation_thread()" << std::endl;
 	uint32_t nppt; // number of particles per thread
-	uint32_t p_start, p_end;
+	uint32_t p_start, p_end; // indices of the [first, last[ Particle of the thread.
 	conso.start_perf_check("simulateur", 1000);
 	while (simulate) {
 		// Synchronisation
-		// std::cout << "lock thread id : " << (short)th_id << "  count=" << (short)sync_count << std::endl;
 		pthread_mutex_lock(&sync_mutex);
 		sync_count++;
 		if (sync_count == MAX_THREAD_NUM) { // last thread to reache synchronisation stop
@@ -123,8 +121,8 @@ void Particle_simulator::simulation_thread(uint8_t th_id) {
 				}
 				if (0.01f * radii < time[0] - time[1]) {
 					time[1] = time[0];
-					uint32_t pa = create_particle(world.size[0]/2-200, 100);
-					uint32_t pb = create_particle(world.size[0]/2+200, 100);
+					uint32_t pa = create_particle(world.getSize(0)/2-200, 100);
+					uint32_t pb = create_particle(world.getSize(0)/2+200, 100);
 
 					if (pa != NULLPART) {
 						particle_array[pa].speed[0] =  800 * cos(-2*time[0]);
@@ -185,6 +183,7 @@ void Particle_simulator::simulation_thread(uint8_t th_id) {
 		gravity(p_start, p_end);
 		// fluid_friction(p_start, p_end);
 		// static_friction(p_start, p_end);
+		// vibrate(p_start, p_end);
 
 		// collision_pp(p_start, p_end);
 		collision_pp_grid_threaded(p_start, p_end);
@@ -200,7 +199,6 @@ void Particle_simulator::simulation_thread(uint8_t th_id) {
 
 void Particle_simulator::simu_step() {
 	// std::cout << "Particle_simulator::simu_step()" << std::endl;
-	// particle_mutex.lock();
 	for (uint32_t i=0; i<nb_active_part; i++) {
 		particle_array[i].acceleration[0] = 0;
 		particle_array[i].acceleration[1] = 0;
@@ -210,11 +208,20 @@ void Particle_simulator::simu_step() {
 		case userForce::Translation:
 			attraction(0, nb_active_part);
 			break;
+		case userForce::Translation_ranged:
+			attraction_ranged(0, nb_active_part);
+			break;
 		case userForce::Rotation:
 			rotation(0, nb_active_part);
 			break;
+		case userForce::Rotation_ranged:
+			rotation_ranged(0, nb_active_part);
+			break;
 		case userForce::Vortex:
 			vortex(0, nb_active_part);
+			break;
+		case userForce::Vortex_ranged:
+			vortex_ranged(0, nb_active_part);
 			break;
 		case userForce::None:
 			break;
@@ -282,24 +289,20 @@ void Particle_simulator::collision_pp_grid() {
 	float collision_coef = 0.45f;
 	uint32_t part1, part2;
 	for (uint8_t i=0; i<2; i++) {
-		for (uint16_t y=0; y<world.gridSize[1]; y++) {
-			for (uint16_t x=0; x<world.gridSize[0]; x++) {
-				// std::cout << "cell1 size :" << (short)world.getCell(x, y).nb_parts << std::endl;
+		for (uint16_t y=0; y<world.getGridSize(1); y++) {
+			for (uint16_t x=0; x<world.getGridSize(0); x++) {
 				for (uint16_t p1=0; p1<world.getCell(x, y).nb_parts; p1++) {
 					part1 = world.getCell(x, y).parts[p1];
-					// std::cout << "[" << x << ", " << y << "] : " << part1 << std::endl;
 	
 					for (int8_t dy=0; dy<2; dy++) {
 						dPos[1] = y + dy;
-						if (dPos[1] < world.gridSize[1]) {
+						if (dPos[1] < world.getGridSize(1)) {
 							for (int8_t dx=-dy; dx<2; dx++) {
 								dPos[0] = x + dx;
-								if (dPos[0] < world.gridSize[0]) {
+								if (dPos[0] < world.getGridSize(0)) {
 									
-									// std::cout << "\tcell2 [" << dPos[0] << ", " << dPos[1] << "], size :" << (short)world.getCell(dPos[0], dPos[1]).nb_parts << std::endl;
 									for (uint16_t p2=0; p2<world.getCell(dPos[0], dPos[1]).nb_parts; p2++) {
 										part2 = world.getCell(dPos[0], dPos[1]).parts[p2];
-										// std::cout << "\t\t" << part2 << std::endl;
 										if (part1 != part2) {
 		
 											vec[0] = particle_array[part2].position[0] + particle_array[part2].speed[0]*dt - particle_array[part1].position[0] - particle_array[part1].speed[0]*dt;
@@ -341,17 +344,17 @@ void Particle_simulator::collision_pp_grid_threaded(uint32_t p_start, uint32_t p
 	for (uint8_t i=0; i<2; i++) {
 		for (uint32_t p1=p_start; p1<p_end; p1++) {
 
-			x = particle_array[p1].position[0] / world.cellSize[0];
-			y = particle_array[p1].position[1] / world.cellSize[1];
+			x = particle_array[p1].position[0] / world.getCellSize(0);
+			y = particle_array[p1].position[1] / world.getCellSize(1);
 			// if (p1 < 10) std::cout << "p1 = " << p1 << ",  cell1 [" << x << ", " << y << "] size :" << (short)world.getCell(x, y).nb_parts << std::endl;
 	
 	
 			for (int8_t dy=0; dy<2; dy++) {
 				dPos[1] = y + dy;
-				if (dPos[1] < world.gridSize[1]) {
+				if (dPos[1] < world.getGridSize(1)) {
 					for (int8_t dx=-dy; dx<2; dx++) {
 						dPos[0] = x + dx;
-						if (dPos[0] < world.gridSize[0]) {
+						if (dPos[0] < world.getGridSize(0)) {
 							
 							// std::cout << "\tcell2 [" << dPos[0] << ", " << dPos[1] << "], size :" << (short)world.getCell(dPos[0], dPos[1]).nb_parts << std::endl;
 							for (uint16_t p2=0; p2<world.getCell(dPos[0], dPos[1]).nb_parts; p2++) {
@@ -474,17 +477,17 @@ void Particle_simulator::collision_pp_glue(uint32_t p_start, uint32_t p_end) {
 	for (uint8_t i=0; i<2; i++) {
 		for (uint32_t p1=p_start; p1<p_end; p1++) {
 
-			x = particle_array[p1].position[0] / world.cellSize[0];
-			y = particle_array[p1].position[1] / world.cellSize[1];
+			x = particle_array[p1].position[0] / world.getCellSize(0);
+			y = particle_array[p1].position[1] / world.getCellSize(1);
 			// if (p1 < 10) std::cout << "p1 = " << p1 << ",  cell1 [" << x << ", " << y << "] size :" << (short)world.getCell(x, y).nb_parts << std::endl;
 
 
 			for (int8_t dy=0; dy<2; dy++) {
 				dPos[1] = y + dy;
-				if (dPos[1] < world.gridSize[1]) {
+				if (dPos[1] < world.getGridSize(1)) {
 					for (int8_t dx=-dy; dx<2; dx++) {
 						dPos[0] = x + dx;
-						if (dPos[0] < world.gridSize[0]) {
+						if (dPos[0] < world.getGridSize(0)) {
 							
 							// std::cout << "\tcell2 [" << dPos[0] << ", " << dPos[1] << "], size :" << (short)world.getCell(dPos[0], dPos[1]).nb_parts << std::endl;
 							for (uint16_t p2=0; p2<world.getCell(dPos[0], dPos[1]).nb_parts; p2++) {
@@ -539,8 +542,8 @@ void Particle_simulator::world_borders(uint32_t p_start, uint32_t p_end) {
 			vec[i] = particle_array[p1].position[i] + particle_array[p1].speed[i]*dt;
 			if (vec[i] < radii) {
 				particle_array[p1].acceleration[i] += (radii - vec[i]) /dt /dt;
-			} else if (world.size[i] - radii < vec[i]) {
-				particle_array[p1].acceleration[i] -= (vec[i] - (world.size[i] - radii)) /dt /dt;
+			} else if (world.getSize(i) - radii < vec[i]) {
+				particle_array[p1].acceleration[i] -= (vec[i] - (world.getSize(i) - radii)) /dt /dt;
 			}
 		}
 	}
@@ -595,6 +598,14 @@ void Particle_simulator::fluid_friction(uint32_t p_start, uint32_t p_end) {
 	for (uint32_t p=p_start; p<p_end; p++) {
 		particle_array[p].speed[0] *= 1-0.1f*dt;
 		particle_array[p].speed[1] *= 1-0.1f*dt;
+	}
+}
+
+void Particle_simulator::vibrate(uint32_t p_start, uint32_t p_end) {
+	int32_t max = 20000;
+	for (uint32_t p=p_start; p<p_end; p++) {
+		particle_array[p].acceleration[0] += sin(60*(time[0] +p)) * max;
+		particle_array[p].acceleration[1] += (p%2 ? 1 : -1)*cos(60*(time[0] +p)) * max;
 	}
 }
 
@@ -688,22 +699,9 @@ void Particle_simulator::delete_particle(uint32_t p) {
 	// std::cout << "Particle_simulator::delete_particle()" << std::endl;
 	Particle swap;
 
-	// std::cout << "\n\nDeletion =======" << std::endl;
-	// std::cout << "nb_active_parts = " << nb_active_part << std::endl;
-	// std::cout << p << " :" << std::endl;
-	// particle_array[p].print();
-	// std::cout << nb_active_part-1 << " :" << std::endl;
-	// particle_array[nb_active_part-1].print();
-
 	swap = particle_array[nb_active_part-1]; // Their order doesn't matter
 	particle_array[nb_active_part-1] = particle_array[p];
 	particle_array[p] = swap;
-
-	// std::cout << "\nAprès suppression" << std::endl;
-	// std::cout << p << " :" << std::endl;
-	// particle_array[p].print();
-	// std::cout << nb_active_part-1 << " :" << std::endl;
-	// particle_array[nb_active_part-1].print();
 
 	nb_active_part--;
 }

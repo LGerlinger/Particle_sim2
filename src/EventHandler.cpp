@@ -2,21 +2,16 @@
 #include "Particle_simulator.hpp"
 
 #include <cmath>
-#include <iostream>
 
 
-EventHandler::EventHandler(Renderer& renderer, sf::RenderWindow& window_, Particle_simulator& simulator_) :
-	window(window_), worldView(renderer.getworldView()), simulator(simulator_)
+EventHandler::EventHandler(Renderer& renderer_, Particle_simulator& simulator_) :
+	renderer(renderer_), window(renderer_.getWindow()), worldView(renderer_.getworldView()), simulator(simulator_)
 {
 	windowSize = window.getSize();
 	window.setKeyRepeatEnabled(false);
 
-	worldView = renderer.getworldView();
 	viewSize = worldView.getSize();
 
-	orders.display = true;
-	orders.simulate = true;
-	
 	for (uint8_t k=0; k<MAX_KEYS; k++) {
 		pressed_keys[k] = sf::Keyboard::Unknown;
 	}
@@ -59,6 +54,9 @@ void EventHandler::loopOverEvents() {
 				break;
 			case sf::Keyboard::LControl :
 				ctrlPressed = true;
+				break;
+			case sf::Keyboard::F :
+				renderer.toggleFullScreen();
 				break;
 			case sf::Keyboard::Delete :
 				if (selectedPart.size()) {
@@ -289,10 +287,10 @@ uint32_t EventHandler::searchParticle(float x, float y) {
 	
 		for (int8_t dy=-1; dy<2; dy++) {
 			dPos[1] = cell_y + dy;
-			if (dPos[1] < simulator.world.gridSize[1]) {
+			if (dPos[1] < simulator.world.getGridSize(1)) {
 				for (int8_t dx=-1; dx<2; dx++) {
 					dPos[0] = cell_x + dx;
-					if (dPos[0] < simulator.world.gridSize[0]) {
+					if (dPos[0] < simulator.world.getGridSize(0)) {
 
 						Cell& cell = simulator.world.getCell(dPos[0], dPos[1]);
 						for (uint8_t i=0; i<cell.nb_parts; i++) {

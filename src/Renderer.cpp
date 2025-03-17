@@ -1,13 +1,13 @@
-#include <cmath>
 #include <iostream>
 
 #include "Renderer.hpp"
 
 
-Renderer::Renderer(Particle_simulator& particle_sim_, sf::RenderWindow& window_) : 
-	particle_sim(particle_sim_), window(window_)
+Renderer::Renderer(Particle_simulator& particle_sim_) : 
+	particle_sim(particle_sim_)
 {
 	std::cout << "Renderer::Renderer()" << std::endl;
+	create_window();
 	worldView = window.getDefaultView();
 
 	// Initializing Particle VertexArray
@@ -36,7 +36,7 @@ Renderer::Renderer(Particle_simulator& particle_sim_, sf::RenderWindow& window_)
 
 	// Initializing Segment VertexArray
 	segment_vertices.setPrimitiveType(sf::Lines);
-	segment_vertices.resize(2*particle_sim.nb_active_seg);
+	segment_vertices.resize(2*particle_sim.get_active_seg());
 
 
 	// loading shaders
@@ -57,7 +57,6 @@ Renderer::Renderer(Particle_simulator& particle_sim_, sf::RenderWindow& window_)
 			
 		}
 	}
-	// std::cout << "fin Renderer::Renderer()" << std::endl;
 }
 
 Renderer::~Renderer() {
@@ -71,10 +70,8 @@ void Renderer::update_display() {
 // std::cout << "Renderer::update_display" << std::endl;
 	window.setView(worldView);
 	window.clear(background);
-	// particle_sim.particle_mutex.lock();
 	update_particle_vertices();
 	update_segment_vertices();
-	// particle_sim.particle_mutex.unlock();
 	sf::RenderStates state(&particle_texture);
 	state.shader = &particle_shader;
 	window.draw(particle_vertices, state);
@@ -85,12 +82,6 @@ void Renderer::update_display() {
 
 void Renderer::update_particle_vertices() {
 	// std::cout << "Renderer::draw_particles" << std::endl;
-	// float r = particle_sim.radii * 2 * sqrt(3);
-	// float triangle[3][2] = {
-	// 	 0,										 -(float)(particle_sim.radii * 2 / sqrt(3)),
-	// 	 particle_sim.radii,		(float)(particle_sim.radii / sqrt(3)),
-	// 	-particle_sim.radii,		(float)(particle_sim.radii / sqrt(3))
-	// };
 	float pr = liquid_shader ? 8 : 1.05; // padding_ratio
 	float quad[4][2] = {
 		-particle_sim.radii *pr,	-particle_sim.radii *pr,
@@ -99,7 +90,7 @@ void Renderer::update_particle_vertices() {
 		-particle_sim.radii *pr,	 particle_sim.radii *pr,
 	};
 	
-	for (uint32_t p=0; p<particle_sim.nb_active_part; p++) {
+	for (uint32_t p=0; p<particle_sim.get_active_part(); p++) {
 		for (uint8_t i=0; i<4; i++) {
 			particle_vertices[4*p+i].position.x = particle_sim.particle_array[p].position[0] + quad[i][0];
 			particle_vertices[4*p+i].position.y = particle_sim.particle_array[p].position[1] + quad[i][1];
@@ -112,7 +103,7 @@ void Renderer::update_particle_vertices() {
 			particle_vertices[4*p+i].color.a = particle_sim.particle_array[p].colour[3];
 		}
 	}
-	for (uint32_t p=particle_sim.nb_active_part; p<NB_PART; p++) {
+	for (uint32_t p=particle_sim.get_active_part(); p<NB_PART; p++) {
 		for (uint8_t i=0; i<4; i++) {
 			particle_vertices[4*p+i].color.a = 0;
 		}
@@ -120,10 +111,22 @@ void Renderer::update_particle_vertices() {
 }
 
 void Renderer::update_segment_vertices() {
-	for (uint32_t s=0; s<particle_sim.nb_active_seg; s++) {
+	for (uint32_t s=0; s<particle_sim.get_active_seg(); s++) {
 		segment_vertices[2*s  ].position.x = particle_sim.seg_array[s].pos[0][0];
 		segment_vertices[2*s  ].position.y = particle_sim.seg_array[s].pos[0][1];
 		segment_vertices[2*s+1].position.x = particle_sim.seg_array[s].pos[1][0];
 		segment_vertices[2*s+1].position.y = particle_sim.seg_array[s].pos[1][1];
 	}
+}
+
+
+void Renderer::create_window() {
+	window.create(sf::VideoMode::getDesktopMode(), "Particle sim", fullscreen ? sf::Style::Fullscreen : sf::Style::Default);
+	window.setVerticalSyncEnabled(Vsync);
+	window.setKeyRepeatEnabled(false);
+}
+
+void Renderer::toggleFullScreen() {
+	fullscreen = !fullscreen;
+	create_window();
 }
