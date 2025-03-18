@@ -102,10 +102,10 @@ public :
 	* Consometre conso;
 	* conso.start_perf_check("loop", 1000);
 	* while (loop) {
-	* 	conso.Tick_fine();
-	* 	foo(); // Time consumtion of foo() is not counted.
-	* 	conso.Start();
-	* 	bar(); // Time consumtion of bar() IS counted.
+		* 	conso.Start();
+		* 	foo(); // Time consumtion of foo() is counted.
+		* 	conso.Tick_fine();
+	* 	bar(); // Time consumtion of bar() is NOT counted.
 	* }
 	* @endcode
 	*

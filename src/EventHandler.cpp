@@ -2,6 +2,7 @@
 #include "Particle_simulator.hpp"
 
 #include <cmath>
+#include <iostream>
 
 
 EventHandler::EventHandler(Renderer& renderer_, Particle_simulator& simulator_) :
@@ -58,6 +59,9 @@ void EventHandler::loopOverEvents() {
 			case sf::Keyboard::F :
 				renderer.toggleFullScreen();
 				break;
+			case sf::Keyboard::S :
+				renderer.takeScreenShot();
+				break;
 			case sf::Keyboard::Delete :
 				if (selectedPart.size()) {
 					for (uint32_t p=0; p<selectedPart.size(); p++) {
@@ -113,7 +117,7 @@ void EventHandler::loopOverEvents() {
 					break;
 				
 				case sf::Mouse::Left :
-					lefttMousePressed = true;
+					leftMousePressed = true;
 					sf::Vector2f worldPos = window.mapPixelToCoords(sf::Mouse::getPosition(window));
 					uint32_t select = searchParticle(worldPos.x, worldPos.y);
 
@@ -174,7 +178,7 @@ void EventHandler::loopOverEvents() {
 			rightMousePressed = false;
 		}
 			if (event.mouseButton.button == sf::Mouse::Left) {
-				lefttMousePressed = false;
+				leftMousePressed = false;
 				for (uint8_t k=0; k<MAX_KEYS; k++) {
 					switch (getPressedKey(k)) {
 						default :
@@ -195,7 +199,7 @@ void EventHandler::loopOverEvents() {
 				);
 
 			}
-			else if (lefttMousePressed) {
+			else if (leftMousePressed) {
 				sf::Vector2f worldPos = window.mapPixelToCoords(sf::Mouse::getPosition(window));
 				simulator.user_point[0] = worldPos.x;
 				simulator.user_point[1] = worldPos.y;
@@ -214,6 +218,15 @@ void EventHandler::loopOverEvents() {
 			);
 			windowSize = window.getSize();
 			viewSize = worldView.getSize();
+			break;
+
+		case sf::Event::LostFocus:
+			renderer.slowFPS(true);
+			emptyPressedKey();
+			break;
+			case sf::Event::GainedFocus:
+			renderer.slowFPS(false);
+			emptyPressedKey();
 			break;
 
 		case sf::Event::Closed:
@@ -244,9 +257,15 @@ void EventHandler::remPressedKey(sf::Keyboard::Key key) {
 	}
 }
 
+void EventHandler::emptyPressedKey() {
+	for (uint8_t k=0; k<MAX_KEYS; k++) {
+		pressed_keys[k] = sf::Keyboard::Unknown;
+	}
+	n_key_pressed = 0;
+}
 
 void EventHandler::update_selection_pos() {
-	if (lefttMousePressed && selectedPart.size()) {
+	if (leftMousePressed && selectedPart.size()) {
 		sf::Vector2f worldPos = window.mapPixelToCoords(sf::Mouse::getPosition(window));
 		float speed[2];
 		for (uint32_t p=0; p<selectedPart.size(); p++) {

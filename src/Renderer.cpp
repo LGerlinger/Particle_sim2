@@ -130,3 +130,12 @@ void Renderer::toggleFullScreen() {
 	fullscreen = !fullscreen;
 	create_window();
 }
+
+void Renderer::takeScreenShot() {
+	sf::Vector2u windowSize = window.getSize();
+	sf::Texture texture;
+	texture.create(windowSize.x, windowSize.y);
+	texture.update(window);
+	sf::Image screenshot = texture.copyToImage();
+	screenshot.saveToFile("result_images/screenshot.png");
+}

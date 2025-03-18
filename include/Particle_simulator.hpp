@@ -49,6 +49,7 @@ public :
 
 	// Perfomance check
 	Consometre conso; //< Used to measure and display performances of the simulation
+	Consometre conso2; //< Used to measure and display performances of the simulation
 
 public :
 	/**
@@ -109,6 +110,11 @@ public :
 	* @brief Check and apply collision between Particles in [p_start, p_end[ and every Segment in seg_array.
 	*/
 	void collision_pl(uint32_t p_start, uint32_t p_end);
+
+	/**
+	* @brief Check and apply collision between Particles in [p_start, p_end[ and every Segment in seg_array using the world's grid..
+	*/
+	void collision_pl_grid(uint32_t p_start, uint32_t p_end);
 
 	/**
 	* @brief Check and apply collision (and a sticking contact) between Particles in [p_start, p_end[ and every Particle using the world's grid.

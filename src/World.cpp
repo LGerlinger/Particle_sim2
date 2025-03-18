@@ -58,7 +58,6 @@ void World::update_grid_particle_contenance(Particle* particle_array, uint32_t a
 	for (uint32_t i=0; i<array_size; i++) {
 		if (0 <= particle_array[i].position[0] && particle_array[i].position[0] < size[0] &&
 				0 <= particle_array[i].position[1] && particle_array[i].position[1] < size[1]) {
-			// std::cout << "particle " << i << " pos=[" << particle_array[i].position[0] << ", " << particle_array[i].position[1] << "] ,\taccessing [" << (uint16_t)(particle_array[i].position[0]/cellSize[0]) << ", " << (uint16_t)(particle_array[i].position[1]/cellSize[1]) << "]" << std::endl;
 			Cell& cell = getCell((uint16_t)(particle_array[i].position[0]/cellSize[0]), (uint16_t)(particle_array[i].position[1]/cellSize[1]));
 			cell.parts[cell.nb_parts] = i;
 			cell.nb_parts = (cell.nb_parts+1) %MAX_PART_CELL;
@@ -77,6 +76,9 @@ void World::update_grid_segment_contenance(Segment* segment_array, uint32_t arra
 
 	// Filling them
 	float vec[2];
+	float start_pos[2];
+	uint16_t start_coord[2], end_coord[2];
+	float inc_length[2];
 	for (uint32_t i=0; i<array_size; i++) {
 		vec[0] = segment_array[i].pos[1][0] - segment_array[i].pos[0][0];
 		vec[1] = segment_array[i].pos[1][1] - segment_array[i].pos[0][1];
@@ -87,7 +89,7 @@ void World::update_grid_segment_contenance(Segment* segment_array, uint32_t arra
 			uint16_t x = segment_array[i].pos[0][0] / cellSize[0];
 			for (uint16_t y=min; y<max; y++) {
 				Cell& cell = getCell(x, y);
-				cell.segs[getCell(x, y).nb_segs] = i;
+				cell.segs[cell.nb_segs] = i;
 				cell.nb_segs = (cell.nb_segs+1) % MAX_SEG_CELL;
 			}
 		}
@@ -97,12 +99,57 @@ void World::update_grid_segment_contenance(Segment* segment_array, uint32_t arra
 			uint16_t y = segment_array[i].pos[0][1] / cellSize[1];
 			for (uint16_t x=min; x<max; x++) {
 				Cell& cell = getCell(x, y);
-				cell.segs[getCell(x, y).nb_segs] = i;
+				cell.segs[cell.nb_segs] = i;
 				cell.nb_segs = (cell.nb_segs+1) % MAX_SEG_CELL;
 			}
 		}
 		else {
-			// this needs implementing
+			end_coord[0] = segment_array[i].pos[1][0];
+			end_coord[1] = segment_array[i].pos[1][1];
+			// Adding end of the segment in the Cell
+			Cell& cell = getCell(end_coord[0], end_coord[1]);
+			cell.segs[cell.nb_segs] = i;
+			cell.nb_segs = (cell.nb_segs+1) % MAX_SEG_CELL;
+
+			float slope = vec[0] / vec[1]; // dx/dy
+			slope = slope*slope; // I only use the square of slope so
+			bool x_positive = 0 < vec[0] ;
+			bool y_positive = 0 < vec[1];
+			bool x_moved = true;
+			bool y_moved = true;
+
+			start_pos[0] = segment_array[i].pos[1][0];
+			start_pos[1] = segment_array[i].pos[1][1];
+			start_coord[0] = start_pos[0];
+			start_coord[1] = start_pos[1];
+			while (start_coord[0] != end_coord[0] || start_coord[1] != end_coord[1]) {
+				// Adding this part of the segment in the Cell
+				cell = getCell(start_coord[0], start_coord[1]);
+				cell.segs[cell.nb_segs] = i;
+				cell.nb_segs = (cell.nb_segs+1) % MAX_SEG_CELL;
+
+				if (x_moved) {
+					inc_length[0] = x_positive ? (start_coord[0]+1)*cellSize[0] - start_pos[0] : start_pos[0] - start_coord[0]*cellSize[0];
+					inc_length[0] = inc_length[0]*inc_length[0];
+					inc_length[0] = sqrt(inc_length[0] + inc_length[0]/slope);
+				}
+				if (y_moved) { // I do 2 checks because of I have to calculate both for the start
+					inc_length[1] = y_positive ? (start_coord[1]+1)*cellSize[1] - start_pos[1] : start_pos[1] - start_coord[1]*cellSize[1];
+					inc_length[1] = inc_length[1]*inc_length[1];
+					inc_length[1] = sqrt(inc_length[1] + inc_length[1]/slope);
+				}
+
+				if (inc_length[0] < inc_length[1]) {
+					start_coord[0] += 2*x_positive-1;
+					x_moved = true;
+					y_moved = false;
+				} else if (inc_length[0] < inc_length[1]) {
+					start_coord[1] += 2*y_positive-1;
+					x_moved = false;
+					y_moved = true;
+				}
+
+			}
 		}
 	}
 }

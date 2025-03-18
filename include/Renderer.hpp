@@ -37,6 +37,7 @@ public :
 	~Renderer();
 
 	uint16_t FPS_limit = 60;
+	void slowFPS(bool slow) {FPS_limit = slow ? 30 : 60;};
 
 	/**
 	* @brief Updates then display vertices, using shaders
@@ -65,8 +66,13 @@ public :
 	bool getVSync() {return Vsync;};
 	sf::RenderWindow& getWindow() {return window;};
 	/**
-	* @brief Create/recreate the window and sets its default parameters
+	* @brief Create/recreate the window and sets its default parameters.
 	*/
 	void create_window();
 	void toggleFullScreen();
+
+	/**
+	* @brief Takes a screenshot and saves it as result_images/screenshot.png .
+	*/
+	void takeScreenShot();
 };

@@ -24,8 +24,8 @@ void Consometre::Tick_general() {
 		Stop();
 		Start();
 		float time = (float)count() / max_tick / 1000000; // ms
-		setZero();
 		std::cout << check_name << " : " << time << " ms" << std::endl;
+		setZero();
 	}
 }
 
@@ -35,7 +35,7 @@ void Consometre::Tick_fine() {
 	if (++tick == max_tick) {
 		tick = 0;
 		float time = (float)count() / max_tick / 1000000; // ms
-		setZero();
 		std::cout << check_name << " : " << time << " ms" << std::endl;
+		setZero();
 	}
 }

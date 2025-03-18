@@ -30,7 +30,7 @@ private :
 	std::vector<float> selectedPartInitPos; //< List of selected Particles' position before moving them
 
 	bool rightMousePressed = false;
-	bool lefttMousePressed = false;
+	bool leftMousePressed = false;
 	bool ctrlPressed = false;
 	sf::Vector2u initialRightMousePos; //< relative position to screen
 	sf::Vector2f initialLeftMousePos; //< world position
@@ -59,6 +59,11 @@ public :
 	* @see MAX_KEYS
 	*/
 	void remPressedKey(sf::Keyboard::Key key);
+	/**
+	* @brief Removes all keys to pressed_keys.
+	* @details The default "no key" is sf::Keyboard::Unknown
+	*/
+	void emptyPressedKey();
 	inline sf::Keyboard::Key getPressedKey(uint8_t key_num) {return pressed_keys[key_num];};
 
 	/**

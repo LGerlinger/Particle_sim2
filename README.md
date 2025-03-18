@@ -19,8 +19,9 @@ So this is kind of a revenge on this previous project and I hope to make a truly
 **; :** step forward the simulation  
 **+ :** x2 the simulation's timestep (long timesteps can make the simulation unstable)  
 **- :** /2 the simulation's timestep (shorter timesteps make the simulation more stable)  
-**suppr :** if some particles are selected : delete them
-**F :** toggles fullscreen
+**suppr :** if some particles are selected : delete them  
+**F :** toggles fullscreen  
+**S :** take a screenshot (saving it as result_images/screenshot.png)  
 
 **MOUSE**  
 **mouse wheel :** zoom / unzoom the view  
