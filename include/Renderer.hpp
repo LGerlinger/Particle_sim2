@@ -18,6 +18,7 @@ private :
 	sf::VertexArray particle_vertices;
 	sf::Texture particle_texture;
 	sf::VertexArray segment_vertices;
+	sf::VertexArray worldGrid_vertices;
 
 	sf::Color background = sf::Color::Black;
 
@@ -60,6 +61,14 @@ public :
 	*/
 	void update_segment_vertices();
 
+	/**
+	* @brief Updates the grid's vertices according to their positions.
+	* @warning Reads particle_sim.world.grid's cells contenance while they might be updating in another thread. But this is read-only and never caused any problem.
+	* I am keeping this without a mutex lock for performance reasons. 
+	*/
+	void update_grid_vertices_init();
+	void update_grid_vertices_colour();
+
 	inline sf::View& getworldView() {return worldView;};
 	// inline sf::View& getUIView() {return UIView;};
 
@@ -75,4 +84,9 @@ public :
 	* @brief Takes a screenshot and saves it as result_images/screenshot.png .
 	*/
 	void takeScreenShot();
+
+	bool dp_particles = true;
+	bool dp_segments = true;
+	bool dp_worldGrid = false;
+	void toggle_grid();
 };

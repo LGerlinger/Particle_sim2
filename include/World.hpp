@@ -1,12 +1,14 @@
 #pragma once
 
+#include "utilities.hpp"
 #include "Particle.hpp"
 #include "Segment.hpp"
 
 #include <cstdint>
+#include <mutex>
 
 #define MAX_PART_CELL 4
-#define MAX_SEG_CELL 4
+#define MAX_SEG_CELL 2
 
 /**
 * The world is divided in cells for better performance.
@@ -28,6 +30,13 @@ private :
 	
 	Cell* grid = nullptr;
 
+	std::mutex grid_mutex;
+
+	inline void giveCellPart(uint16_t x, uint16_t y, uint32_t part);
+	inline void giveCellSeg(uint16_t x, uint16_t y, uint32_t seg);
+	inline void giveCellPart(Cell* cell, uint32_t part);
+	inline void giveCellSeg(Cell* cell, uint32_t seg);
+
 public:
 	World(float sizeX, float sizeY, float cellSizeX, float cellSizeY);
 	~World();
@@ -37,6 +46,7 @@ public:
 	inline float getCellSize(bool xy) const {return cellSize[xy];};
 	
 	inline Cell& getCell(uint16_t x, uint16_t y) {return grid[y*gridSize[0] +x];};
+	inline Cell* getCell_ptr(uint16_t x, uint16_t y) {return &grid[y*gridSize[0] +x];};
 
 	/**
 	* @brief Returns the cell where the point [pos_x, pos_y] is.
@@ -54,7 +64,7 @@ public:
 	* @brief Put the Particles (whithin the world borders) in their corresponding Cells.
 	* This updates the parts attribute of the Cells of grid.
 	*/
-	void update_grid_particle_contenance(Particle* particle_array, uint32_t array_size);
+	void update_grid_particle_contenance(Particle* particle_array, uint32_t array_size, float dt);
 
 	/**
 	* @brief Put the Segments in their corresponding Cells.
@@ -67,4 +77,7 @@ public:
 	* @param part is the Particle's number in the array containing all Particles. 
 	*/
 	void change_cell_part(uint32_t part, float init_pos_x, float init_pos_y, float end_pos_x, float end_pos_y);
+
+	inline void ask_lock() {grid_mutex.lock();};
+	inline void give_lock() {grid_mutex.unlock();};
 };

@@ -1,5 +1,5 @@
 CXX=g++
-CXXFLAGS=-I. -Iinclude
+CXXFLAGS=-I. -Iinclude -O3 -flto
 #CPPFLAGS=-std=c++11
 SFML_LIB=-lsfml-graphics -lsfml-window -lsfml-system
 

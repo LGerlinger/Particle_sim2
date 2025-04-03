@@ -12,15 +12,15 @@
 #include "World.hpp"
 
 
-#define NB_PART 12000
+#define NB_PART 24000
 #define MAX_THREAD_NUM 6
 #define NULLPART (uint32_t)-1
 
 class Particle_simulator {
 public :
 	float masses = 1;
-	float radii = 4;
-	float dt = 0.002;
+	float radii = 2;
+	float dt = 0.001;
 
 private :
 	// particles and segments
@@ -46,6 +46,7 @@ public :
 	bool simulate = true;
 	bool paused = false;
 	bool step = false;
+	bool quickstep = false;
 
 	// Perfomance check
 	Consometre conso; //< Used to measure and display performances of the simulation

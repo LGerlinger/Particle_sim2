@@ -47,6 +47,9 @@ void EventHandler::loopOverEvents() {
 			case sf::Keyboard::SemiColon :
 				simulator.step = true;
 				break;
+			case sf::Keyboard::Comma :
+				simulator.quickstep = true;
+				break;
 			case sf::Keyboard::Add :
 				simulator.dt *= 2;
 				break;
@@ -62,6 +65,17 @@ void EventHandler::loopOverEvents() {
 			case sf::Keyboard::S :
 				renderer.takeScreenShot();
 				break;
+			
+			case sf::Keyboard::K :
+			renderer.dp_particles = !renderer.dp_particles;
+			break;
+			case sf::Keyboard::L :
+			renderer.dp_segments = !renderer.dp_segments;
+				break;
+			case sf::Keyboard::M :
+				renderer.toggle_grid();
+				break;
+
 			case sf::Keyboard::Delete :
 				if (selectedPart.size()) {
 					for (uint32_t p=0; p<selectedPart.size(); p++) {
@@ -84,10 +98,16 @@ void EventHandler::loopOverEvents() {
 			break;
 		
 		case sf::Event::KeyReleased :
-			if (event.key.code == sf::Keyboard::LControl) {
-				ctrlPressed = false;
-			}else {
-				remPressedKey(event.key.code);
+			switch (event.key.code) {
+				case sf::Keyboard::LControl :
+					ctrlPressed = false;
+					break;
+				case sf::Keyboard::Comma :
+					simulator.quickstep = false;
+					break;
+				default :
+					remPressedKey(event.key.code);
+					break;
 			}
 			break;
 

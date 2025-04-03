@@ -1,6 +1,7 @@
 #include <iostream>
 
 #include "Renderer.hpp"
+#include "World.hpp"
 
 
 Renderer::Renderer(Particle_simulator& particle_sim_) : 
@@ -38,6 +39,11 @@ Renderer::Renderer(Particle_simulator& particle_sim_) :
 	segment_vertices.setPrimitiveType(sf::Lines);
 	segment_vertices.resize(2*particle_sim.get_active_seg());
 
+	worldGrid_vertices.setPrimitiveType(sf::Quads);
+	if (dp_worldGrid) {
+		worldGrid_vertices.resize(4* particle_sim.world.getGridSize(0) * particle_sim.world.getGridSize(1));
+		update_grid_vertices_init();
+	}
 
 	// loading shaders
 	if (!sf::Shader::isAvailable()) {
@@ -68,14 +74,23 @@ Renderer::~Renderer() {
 
 void Renderer::update_display() {
 // std::cout << "Renderer::update_display" << std::endl;
+	sf::RenderStates state;
+
 	window.setView(worldView);
 	window.clear(background);
-	update_particle_vertices();
-	update_segment_vertices();
-	sf::RenderStates state(&particle_texture);
-	state.shader = &particle_shader;
-	window.draw(particle_vertices, state);
-	window.draw(segment_vertices, &segment_shader);
+
+	if (dp_particles) {
+		update_particle_vertices();
+		state.texture = &particle_texture;
+		state.shader = &particle_shader;
+	}
+	if (dp_segments) update_segment_vertices();
+	if (dp_worldGrid) {
+		update_grid_vertices_colour();
+		window.draw(worldGrid_vertices);
+	}
+	if (dp_particles) window.draw(particle_vertices, state);
+	if (dp_segments) window.draw(segment_vertices, &segment_shader);
 	window.display();
 }
 
@@ -119,6 +134,52 @@ void Renderer::update_segment_vertices() {
 	}
 }
 
+void Renderer::update_grid_vertices_init() {
+	World& world = particle_sim.world;
+	uint32_t index = 0;
+	for (uint16_t y=0; y<world.getGridSize(1); y++) {
+		for (uint16_t x=0; x<world.getGridSize(0); x++) {
+			Cell& cell = world.getCell(x, y);
+
+			// position
+			worldGrid_vertices[4*index  ].position.x = x *    world.getCellSize(0);
+			worldGrid_vertices[4*index  ].position.y = y *    world.getCellSize(1);
+			worldGrid_vertices[4*index+1].position.x = (x+1)* world.getCellSize(0);
+			worldGrid_vertices[4*index+1].position.y = y *    world.getCellSize(1);
+			worldGrid_vertices[4*index+2].position.x = (x+1)* world.getCellSize(0);
+			worldGrid_vertices[4*index+2].position.y = (y+1)* world.getCellSize(1);
+			worldGrid_vertices[4*index+3].position.x = x *    world.getCellSize(0);
+			worldGrid_vertices[4*index+3].position.y = (y+1)* world.getCellSize(1);
+
+			// colour
+			worldGrid_vertices[4*index   ].color = sf::Color::Black;
+			worldGrid_vertices[4*index +1].color = sf::Color::Black;
+			worldGrid_vertices[4*index +2].color = sf::Color::Black;
+			worldGrid_vertices[4*index +3].color = sf::Color::Black;
+			index++;
+		}
+	}
+}
+
+void Renderer::update_grid_vertices_colour() {
+	World& world = particle_sim.world;
+	uint32_t index = 0;
+	world.ask_lock();
+	for (uint16_t y=0; y<world.getGridSize(1); y++) {
+		for (uint16_t x=0; x<world.getGridSize(0); x++) {
+			Cell& cell = world.getCell(x, y);
+
+			worldGrid_vertices[4*index   ].color.g = (255 * cell.nb_parts)/MAX_PART_CELL;
+			worldGrid_vertices[4*index   ].color.r = (255 * cell.nb_segs )/MAX_SEG_CELL ;
+			worldGrid_vertices[4*index +2].color.g = (255 * cell.nb_parts)/MAX_PART_CELL;
+			worldGrid_vertices[4*index +2].color.r = (255 * cell.nb_segs )/MAX_SEG_CELL ;
+
+			index++;
+		}
+	}
+	world.give_lock();
+}
+
 
 void Renderer::create_window() {
 	window.create(sf::VideoMode::getDesktopMode(), "Particle sim", fullscreen ? sf::Style::Fullscreen : sf::Style::Default);
@@ -138,4 +199,16 @@ void Renderer::takeScreenShot() {
 	texture.update(window);
 	sf::Image screenshot = texture.copyToImage();
 	screenshot.saveToFile("result_images/screenshot.png");
+}
+
+
+void Renderer::toggle_grid() {
+	dp_worldGrid = !dp_worldGrid;
+
+	if (dp_worldGrid) {
+		worldGrid_vertices.resize(4* particle_sim.world.getGridSize(0) * particle_sim.world.getGridSize(1));
+		update_grid_vertices_init();
+	} else {
+		worldGrid_vertices.resize(0);
+	}
 }

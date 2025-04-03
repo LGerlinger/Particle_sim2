@@ -16,11 +16,15 @@ So this is kind of a revenge on this previous project and I hope to make a truly
 **KEYBOARD**  
 **escape :** close the window  
 **space :** pause the simulation  
-**; :** step forward the simulation  
+**; :** 1 step forward the simulation  
+**, :** slowly step forward the simulation  
 **+ :** x2 the simulation's timestep (long timesteps can make the simulation unstable)  
 **- :** /2 the simulation's timestep (shorter timesteps make the simulation more stable)  
 **suppr :** if some particles are selected : delete them  
 **F :** toggles fullscreen  
+**K :** toggles display of Particles  
+**L :** toggles display of Segments  
+**M :** toggles display of World's grid  
 **S :** take a screenshot (saving it as result_images/screenshot.png)  
 
 **MOUSE**  
