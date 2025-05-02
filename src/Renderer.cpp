@@ -1,6 +1,8 @@
+#include <cmath>
 #include <iostream>
 
 #include "Renderer.hpp"
+#include "Particle_simulator.hpp"
 #include "World.hpp"
 
 
@@ -32,7 +34,7 @@ Renderer::Renderer(Particle_simulator& particle_sim_) :
 		}
 	}
 	else {
-		std::cout << "Error loading disk128x128.png" << std::endl;
+		std::cout << "\tError loading disk128x128.png" << std::endl;
 	}
 
 	// Initializing Segment VertexArray
@@ -106,16 +108,22 @@ void Renderer::update_particle_vertices() {
 	};
 	
 	for (uint32_t p=0; p<particle_sim.get_active_part(); p++) {
+		float norm = sqrt(particle_sim.particle_array[p].speed[0]*particle_sim.particle_array[p].speed[0] + particle_sim.particle_array[p].speed[1]*particle_sim.particle_array[p].speed[1]);
+		norm = std::max(0.f, norm-4);
 		for (uint8_t i=0; i<4; i++) {
 			particle_vertices[4*p+i].position.x = particle_sim.particle_array[p].position[0] + quad[i][0];
 			particle_vertices[4*p+i].position.y = particle_sim.particle_array[p].position[1] + quad[i][1];
 
 			if (!liquid_shader) {
-				particle_vertices[4*p+i].color.r = particle_sim.particle_array[p].colour[0];
-				particle_vertices[4*p+i].color.g = particle_sim.particle_array[p].colour[1];
-				particle_vertices[4*p+i].color.b = particle_sim.particle_array[p].colour[2];
+				// particle_vertices[4*p+i].color.r = particle_sim.particle_array[p].colour[0];
+				// particle_vertices[4*p+i].color.g = particle_sim.particle_array[p].colour[1];
+				// particle_vertices[4*p+i].color.b = particle_sim.particle_array[p].colour[2];
+				particle_vertices[4*p+i].color.r = 255* std::min(norm/100, 1.f);
+				particle_vertices[4*p+i].color.g = 255* std::min(norm/400, 1.f);
+				particle_vertices[4*p+i].color.b = 255* std::min(norm/800, 1.f);
 			}
-			particle_vertices[4*p+i].color.a = particle_sim.particle_array[p].colour[3];
+			// particle_vertices[4*p+i].color.a = particle_sim.particle_array[p].colour[3];
+			particle_vertices[4*p+i].color.a = 255;
 		}
 	}
 	for (uint32_t p=particle_sim.get_active_part(); p<NB_PART; p++) {
@@ -162,22 +170,29 @@ void Renderer::update_grid_vertices_init() {
 }
 
 void Renderer::update_grid_vertices_colour() {
+	sf::Color color_tab[MAX_PART_CELL+1] = {sf::Color::Black, sf::Color::Green, sf::Color::Yellow, sf::Color::Red, sf::Color::Magenta};
+	sf::Color error_color = sf::Color::White;
 	World& world = particle_sim.world;
 	uint32_t index = 0;
-	world.ask_lock();
 	for (uint16_t y=0; y<world.getGridSize(1); y++) {
 		for (uint16_t x=0; x<world.getGridSize(0); x++) {
 			Cell& cell = world.getCell(x, y);
-
-			worldGrid_vertices[4*index   ].color.g = (255 * cell.nb_parts)/MAX_PART_CELL;
-			worldGrid_vertices[4*index   ].color.r = (255 * cell.nb_segs )/MAX_SEG_CELL ;
-			worldGrid_vertices[4*index +2].color.g = (255 * cell.nb_parts)/MAX_PART_CELL;
-			worldGrid_vertices[4*index +2].color.r = (255 * cell.nb_segs )/MAX_SEG_CELL ;
-
+			uint8_t nb_parts = cell.nb_parts.load();
+			if (nb_parts < MAX_PART_CELL+1 && cell.nb_segs < MAX_SEG_CELL+1) {
+				worldGrid_vertices[4*index   ].color = color_tab[nb_parts];
+				worldGrid_vertices[4*index +1].color = cell.nb_segs ? sf::Color::Blue : color_tab[nb_parts];
+				worldGrid_vertices[4*index +2].color = color_tab[nb_parts];
+				worldGrid_vertices[4*index +3].color = cell.nb_segs ? sf::Color::Blue : color_tab[nb_parts];
+			} else {
+				// std::cout << "Render detects cell overloading " << x << ", " << y << "  :  parts=" << (short)nb_parts << ",  nb_segs=" << (short)cell.nb_segs << std::endl;
+				worldGrid_vertices[4*index   ].color = error_color;
+				worldGrid_vertices[4*index +1].color = cell.nb_segs ? sf::Color::Blue : error_color;
+				worldGrid_vertices[4*index +2].color = error_color;
+				worldGrid_vertices[4*index +3].color = cell.nb_segs ? sf::Color::Blue : error_color;
+			}
 			index++;
 		}
 	}
-	world.give_lock();
 }
 
 

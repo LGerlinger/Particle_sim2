@@ -38,7 +38,7 @@ int main() {
 		
 		nb_frames++;
 		if (clock.count() > Consometre::NB_TICK_SEC) { // 1s passed
-			std::cout << "FPS : " << nb_frames << std::endl;
+			// std::cout << "FPS : " << nb_frames << std::endl;
 			clock.setZero();
 			nb_frames = 0;
 		}

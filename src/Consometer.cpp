@@ -15,6 +15,7 @@ void Consometre::start_perf_check(std::string check_name_, uint32_t laps) {
 	max_tick = laps;
 	check_name = check_name_;
 	tick = 0;
+	setZero();
 	Start();
 }
 

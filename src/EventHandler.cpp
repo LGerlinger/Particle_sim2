@@ -1,6 +1,7 @@
 #include "EventHandler.hpp"
 #include "Particle_simulator.hpp"
 
+#include <SFML/Window/Keyboard.hpp>
 #include <cmath>
 #include <iostream>
 
@@ -64,6 +65,13 @@ void EventHandler::loopOverEvents() {
 				break;
 			case sf::Keyboard::S :
 				renderer.takeScreenShot();
+				break;
+			case sf::Keyboard::H :
+				if (keyboard.isKeyPressed(sf::Keyboard::LControl)) simulator.initialize_particles();
+				else {
+					worldView = window.getDefaultView();
+					viewSize = worldView.getSize();
+				}
 				break;
 			
 			case sf::Keyboard::K :
@@ -157,6 +165,7 @@ void EventHandler::loopOverEvents() {
 							for (uint8_t k=0; k<MAX_KEYS; k++) {
 								switch (getPressedKey(k)) {
 									case sf::Keyboard::Delete :
+									simulator.range = 200;
 									if (simulator.paused) {
 										simulator.delete_range(worldPos.x, worldPos.y, simulator.range);
 									} else {
@@ -164,22 +173,28 @@ void EventHandler::loopOverEvents() {
 									}
 										break;
 									case sf::Keyboard::A :
+										simulator.range = INFINITY;
 										simulator.appliedForce = Particle_simulator::userForce::Translation;
 										break;
 									case sf::Keyboard::Z :
-										simulator.appliedForce = Particle_simulator::userForce::Translation_ranged;
+										simulator.range = 200;
+										simulator.appliedForce = Particle_simulator::userForce::Translation;
 										break;
 									case sf::Keyboard::E :
+										simulator.range = INFINITY;
 										simulator.appliedForce = Particle_simulator::userForce::Rotation;
 										break;
 									case sf::Keyboard::R :
-										simulator.appliedForce = Particle_simulator::userForce::Rotation_ranged;
+										simulator.range = 200;
+										simulator.appliedForce = Particle_simulator::userForce::Rotation;
 										break;
 									case sf::Keyboard::T :
+										simulator.range = INFINITY;
 										simulator.appliedForce = Particle_simulator::userForce::Vortex;
 										break;
 									case sf::Keyboard::Y :
-										simulator.appliedForce = Particle_simulator::userForce::Vortex_ranged;
+										simulator.range = 200;
+										simulator.appliedForce = Particle_simulator::userForce::Vortex;
 										break;
 								}
 							}

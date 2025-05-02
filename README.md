@@ -22,6 +22,8 @@ So this is kind of a revenge on this previous project and I hope to make a truly
 **- :** /2 the simulation's timestep (shorter timesteps make the simulation more stable)  
 **suppr :** if some particles are selected : delete them  
 **F :** toggles fullscreen  
+**H :** reset to home view  
+**Ctrl+H :** reset particles position  
 **K :** toggles display of Particles  
 **L :** toggles display of Segments  
 **M :** toggles display of World's grid  

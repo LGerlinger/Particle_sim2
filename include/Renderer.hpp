@@ -62,11 +62,16 @@ public :
 	void update_segment_vertices();
 
 	/**
-	* @brief Updates the grid's vertices according to their positions.
+	* @brief Updates the grid's vertices according to their positions. You should only need to call this once.
 	* @warning Reads particle_sim.world.grid's cells contenance while they might be updating in another thread. But this is read-only and never caused any problem.
 	* I am keeping this without a mutex lock for performance reasons. 
 	*/
 	void update_grid_vertices_init();
+	/**
+	* @brief Updates the grid's vertices according to their contenance. This is what should be called in a loop.
+	* @warning Reads particle_sim.world.grid's cells contenance while they might be updating in another thread. But this is read-only and never caused any problem.
+	* I am keeping this without a mutex lock for performance reasons. 
+	*/
 	void update_grid_vertices_colour();
 
 	inline sf::View& getworldView() {return worldView;};
@@ -88,5 +93,6 @@ public :
 	bool dp_particles = true;
 	bool dp_segments = true;
 	bool dp_worldGrid = false;
+	// Toggles the displaying of the grid.
 	void toggle_grid();
 };
