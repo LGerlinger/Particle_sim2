@@ -1,9 +1,9 @@
 #pragma once
 
+#include "Particle_simulator.hpp"
+
 #include <SFML/Window.hpp>
 #include <SFML/Graphics.hpp>
-
-#include "Particle_simulator.hpp"
 
 /**
 * Handles everything relative to displaying (vertices, views, shaders)
@@ -19,6 +19,7 @@ private :
 	sf::Texture particle_texture;
 	sf::VertexArray segment_vertices;
 	sf::VertexArray worldGrid_vertices;
+	sf::RectangleShape world_vertices;
 
 	sf::Color background = sf::Color::Black;
 
@@ -37,7 +38,7 @@ public :
 	Renderer(Particle_simulator& particle_sim_);
 	~Renderer();
 
-	uint16_t FPS_limit = 60;
+	uint16_t FPS_limit = 1;
 	void slowFPS(bool slow) {FPS_limit = slow ? 30 : 60;};
 
 	/**

@@ -2,9 +2,7 @@
 
 #include <atomic>
 #include <functional>
-#include <pthread.h>
 #include <thread>
-#include <vector>
 
 
 class ThreadHandler {
@@ -87,7 +85,7 @@ public :
 	* @brief Call synchronize_internal<ThreadHandler>(n2synchronize, max_wait_sec, nullptr, nullptr, false, false)
 	* @see synchronize_internal
 	*/
-	void synchronize(uint8_t n2synchronize, uint8_t max_wait_sec) {
+	inline void synchronize(uint8_t n2synchronize, uint8_t max_wait_sec) {
 		synchronize_internal<ThreadHandler>(n2synchronize, max_wait_sec, nullptr, nullptr, false, false); // lol for the T substitution
 	};
 
@@ -96,13 +94,13 @@ public :
 	* @see synchronize_internal
 	*/
 	template<typename T>
-	void synchronize_first(uint8_t n2synchronize, uint8_t max_wait_sec, T* obj, void (T::*unique_work)(void));
+	inline void synchronize_first(uint8_t n2synchronize, uint8_t max_wait_sec, T* obj, void (T::*unique_work)(void));
 	/**
 	* @brief Call synchronize_internal(n2synchronize, max_wait_sec, obj, unique_work, false, true);
 	* @see synchronize_internal
 	*/
 	template<typename T>
-	void synchronize_last(uint8_t n2synchronize, uint8_t max_wait_sec, T* obj, void (T::*unique_work)(void));
+	inline void synchronize_last(uint8_t n2synchronize, uint8_t max_wait_sec, T* obj, void (T::*unique_work)(void));
 };
 
 

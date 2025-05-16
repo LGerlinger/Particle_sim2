@@ -1,13 +1,11 @@
 #pragma once
 
-#include <cstdint>
-
 #include "Consometer.hpp"
 #include "Particle.hpp"
-#include "Segment.hpp"
 #include "World.hpp"
 #include "ThreadHandler.hpp"
 
+#include <cstdint>
 
 #define NB_PART 24000
 #define MAX_THREAD_NUM 6
@@ -16,19 +14,16 @@
 class Particle_simulator {
 public :
 	float masses = 1;
-	float radii = 2;
+	float radii = 4;
 	float dt = 0.001;
 
 private :
 	// particles and segments
 	float time[2] = {0, 0};
 	uint32_t nb_active_part = NB_PART; //< Number of Particles being simulated and displayed
-	uint32_t nb_active_seg = 6; //< Number of Segments being simulated and displayed
 public :
 	inline uint32_t get_active_part() {return nb_active_part;};
-	inline uint32_t get_active_seg() {return nb_active_seg;};
 	Particle particle_array[NB_PART];
-	Segment seg_array[6];
 
 	World world;
 
@@ -127,9 +122,16 @@ public :
 	void collision_pl(uint32_t p_start, uint32_t p_end);
 
 	/**
-	* @brief Check and apply collision between Particles in [p_start, p_end[ and every Segment in seg_array using the world's grid..
+	* @brief Check and apply collision between Particles in [p_start, p_end[ and every Segment in seg_array using the world's grid.
+	* @details Loops over every Particle to check for a collision with a Segment.
 	*/
 	void collision_pl_grid(uint32_t p_start, uint32_t p_end);
+
+	/**
+	* @brief Check and apply collision between the segment seg_num and the Particles known to be in contact thanks to the world's grid.
+	* @details Loops over every cell of the Segment to check for a collision with a Particle.
+	*/
+	void collision_lp_grid(uint32_t c_start, uint32_t c_end, uint16_t seg_num); // Particule-segment collision over the cell [p_start, p_end[ of segment seg_num
 
 	/**
 	* @brief Check and apply collision (and a sticking contact) between Particles in [p_start, p_end[ and every Particle using the world's grid.

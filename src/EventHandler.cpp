@@ -1,9 +1,6 @@
 #include "EventHandler.hpp"
-#include "Particle_simulator.hpp"
 
-#include <SFML/Window/Keyboard.hpp>
 #include <cmath>
-#include <iostream>
 
 
 EventHandler::EventHandler(Renderer& renderer_, Particle_simulator& simulator_) :
@@ -156,7 +153,7 @@ void EventHandler::loopOverEvents() {
 						selectedPart.push_back(select);
 						selectedPartInitPos.push_back(simulator.particle_array[select].position[0]);
 						selectedPartInitPos.push_back(simulator.particle_array[select].position[1]);
-						simulator.particle_array[select].select(true);
+						// simulator.particle_array[select].select(true);
 						initialLeftMousePos.x = worldPos.x;
 						initialLeftMousePos.y = worldPos.y;
 					}
@@ -325,9 +322,9 @@ void EventHandler::update_selection_pos() {
 }
 
 void EventHandler::clear_selection() {
-	for (uint32_t p=0; p<selectedPart.size(); p++) {
-		simulator.particle_array[selectedPart[p]].select(false);
-	}
+	// for (uint32_t p=0; p<selectedPart.size(); p++) {
+	// 	simulator.particle_array[selectedPart[p]].select(false);
+	// }
 	selectedPart.clear();
 	selectedPartInitPos.clear();
 }

@@ -1,27 +1,44 @@
 #pragma once
 
-#include "utilities.hpp"
 #include "Particle.hpp"
 #include "Segment.hpp"
 
 #include <atomic>
 #include <cstdint>
+#include <mutex>
+#include <vector>
 
 
 #define MAX_PART_CELL 4
-#define MAX_SEG_CELL 2
+#define MAX_SEG_CELL 10
 
 /**
 * The world is divided in cells for better performance.
-* Each Cell can contain MAX_PART_CELL particles and MAX_SEG_CELL segments
+* Each Cell can contain MAX_PART_CELL particles.
 */
 struct Cell {
 	std::atomic_uint8_t nb_parts;
-	uint8_t nb_segs;
+	// uint8_t nb_segs;
 	uint32_t parts[MAX_PART_CELL];
-	uint16_t segs[MAX_SEG_CELL];
+	// uint16_t segs[MAX_SEG_CELL];
 
 	static Cell nullCell;
+	bool isReal() {return this != &nullCell;}
+};
+
+/**
+* Sometimes it is better to have the grid store segment positions so I can iterate through the Particles for collisions.
+* Other times, it is better to have the segments store their cell positions so I can iterate through those instead.
+* It depends on the number of Particles, the combined size of the Segments and the number of Particles in contact with the segments.
+*
+* So I am creating 2 parallel grids, one for Particles, one for the Segments.
+* Depending on the relative size of segments and number of particles I will either iterate through Particles or Segments for collisions. 
+*/
+struct Cell_seg {
+	uint8_t nb_segs;
+	uint16_t segs[MAX_SEG_CELL];
+
+	static Cell_seg nullCell;
 	bool isReal() {return this != &nullCell;}
 };
 
@@ -32,16 +49,25 @@ private :
 	uint16_t gridSize[2];
 	float cellSize[2];
 	bool empty_blind = true; //< Whether the world should be emptied blindly or by using filled_coords.
-	
+
+	bool segments_in_grid = false; //< Whether the information of which cell each segment goes through is stored in a grid or in the segments.
+
 	Cell* grid = nullptr;
 	uint16_t* filled_coords = nullptr; //< List of grid coordinates where a Particle has been added to the grid. Used like part.x=[2*part_index], part.y=[2*part_index +1]
+	Cell_seg* grid_seg = nullptr;
+	std::mutex grid_seg_mutex;
 
 	inline void giveCellPart(uint16_t x, uint16_t y, uint32_t part);
 	inline void giveCellSeg(uint16_t x, uint16_t y, uint16_t seg);
+	        void remCellSeg(uint16_t x, uint16_t y, uint16_t seg);
 	inline void giveCellPart(Cell* cell, uint32_t part);
-	inline void giveCellSeg(Cell* cell, uint16_t seg);
-
+	inline void giveCellSeg(Cell_seg* cell, uint16_t seg);
+	
 public:
+	std::atomic_uint64_t n_cell_seg = 0;
+	std::vector<Segment> seg_array;
+	inline bool sig() {return segments_in_grid;};
+
 	World(float sizeX, float sizeY, float cellSizeX, float cellSizeY, uint32_t max_particle_used, bool force_empty_pbased = false);
 	~World();
 
@@ -51,6 +77,8 @@ public:
 	
 	inline Cell& getCell(uint16_t x, uint16_t y) {return grid[y*gridSize[0] +x];};
 	inline Cell* getCell_ptr(uint16_t x, uint16_t y) {return &grid[y*gridSize[0] +x];};
+	inline Cell_seg& getCell_seg(uint16_t x, uint16_t y) {return grid_seg[y*gridSize[0] +x];};
+	inline Cell_seg* getCell_ptr_seg(uint16_t x, uint16_t y) {return &grid_seg[y*gridSize[0] +x];};
 
 	/**
 	* @brief Returns the cell where the point [pos_x, pos_y] is.
@@ -96,13 +124,37 @@ public:
 	* @param start The first line to empty (included).
 	* @param end The last line to empty (excluded).
 	*/
-	void empty_grid(uint32_t start, uint32_t end);
+	template<typename T>
+	void empty_grid(uint32_t start, uint32_t end, T* grille);
 
 	/**
-	* @brief Puts the Segments in their corresponding Cells.
-	* This updates the segs attribute of the Cells of grid.
+	* @brief A function to apply fun_over_cell over every Cell the Segment seg traverses.
+	* This function uses a 3-cells width.
 	*/
-	void update_grid_segment_contenance(Segment* segment_array, uint16_t array_size);
+	void go_through_segment(uint16_t seg, void(World::*fun_over_cell)(uint16_t, uint16_t, uint16_t));
+
+	/**
+	* @brief Creates a Segment and gives it its Cells.
+	* Either the Cells are stored in the segment or in the grid_seg
+	*/
+	void add_segment(float Ax, float Ay, float Bx, float By);
+
+	/**
+	* @brief Deletes a Segment and remove it from its Cells.
+	* Either the Cells are stored in the segment or in the grid_seg
+	*/
+	void rem_segment(uint16_t index);
+
+	/**
+	* @brief Changes the Segment-Cell storing system from grid-based to Segment-based and the other way around if needed.
+	* Uses a hysteresis to check which system currently used is the best. 
+	* @param nb_parts The number of Particles currently used in the simulation (for collisions with Segments). 
+	*/
+	void chg_seg_store_sys(uint32_t nb_parts=0);
+
+
+	inline bool gsm_trylock() {return grid_seg_mutex.try_lock();};
+	inline void gsm_unlock() {grid_seg_mutex.unlock();};
 
 	/**
 	* @brief Remove a Particle from a Cell to add it to another.

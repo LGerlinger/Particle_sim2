@@ -1,6 +1,6 @@
 #include "Consometer.hpp"
 #include <iostream>
-#include <ratio>
+// #include <ratio>
 
 Consometre::Consometre() { setZero(); }
 void Consometre::Start() { start = std::chrono::high_resolution_clock::now().time_since_epoch(); }
