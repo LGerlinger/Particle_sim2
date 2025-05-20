@@ -95,6 +95,8 @@ public :
 
 	/**
 	* @brief Tick to signal a lap has passed.
+	* @return If max_tick has passed : average tick time
+	* else : 0
 	* @details This is used to count the time passed in a part of a loop. 
 	* This function prints the check_name with the time consumption every max_tick call.
 	* example :
@@ -111,7 +113,14 @@ public :
 	*
 	* @warning start_perf_check should have been called at least once before.
 	*/
-	void Tick_fine();
+	float Tick_fine(bool cout_result);
+
+	/**
+	* @brief Returns the average tick time in ms, since the last tick reset.
+	* @details This changes in accuracy as more and more tick are passed.
+	* @warning Tick_general or Tick_fine should have been called at least once before (though regularly is better). Else this function would serve no purpose.
+	*/
+	float get_average_perf_now();
 
 	static const uint32_t NB_TICK_SEC = 1000000000; //< Number count() reaches after counting 1 second.
 };

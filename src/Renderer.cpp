@@ -3,12 +3,16 @@
 #include "World.hpp"
 
 #include <cmath>
+#include <iomanip>
 #include <iostream>
+#include <string>
+#include <sstream>
 
 Renderer::Renderer(Particle_simulator& particle_sim_) : 
 	particle_sim(particle_sim_)
 {
 	std::cout << "Renderer::Renderer()" << std::endl;
+	setDefaultParameters();
 	create_window();
 	worldView = window.getDefaultView();
 
@@ -52,6 +56,11 @@ Renderer::Renderer(Particle_simulator& particle_sim_) :
 	world_vertices.setOutlineColor(sf::Color::White);
 	world_vertices.setFillColor(sf::Color::Transparent);
 
+	user_interact_zone.setRadius(particle_sim_.range);
+	user_interact_zone.setOutlineThickness(0.75);
+	user_interact_zone.setOutlineColor(sf::Color::White);
+	user_interact_zone.setFillColor(sf::Color::Transparent);
+
 	// loading shaders
 	if (!sf::Shader::isAvailable()) {
 		std::cout << "\tRenderer : Shaders are not available on this computer" << std::endl;
@@ -70,6 +79,19 @@ Renderer::Renderer(Particle_simulator& particle_sim_) :
 			
 		}
 	}
+
+	if (!font.loadFromFile("VCR_OSD_MONO_1.001.ttf")) std::cout << "error loading VCR_OSD_MONO_1.001.ttf" << std::endl;
+	else {
+		FPS_display.setFont(font);
+		FPS_display.setString("=^w^=");
+		FPS_display.setCharacterSize(12);
+		// FPS_display.setLineSpacing(2);
+		FPS_display.setFillColor(sf::Color::White);
+		FPS_display.setPosition(7.f, 10.f);
+	}
+
+	// Counting time
+	display_time.start_perf_check("Display time", 30);
 }
 
 Renderer::~Renderer() {
@@ -79,52 +101,94 @@ Renderer::~Renderer() {
 }
 
 
+void Renderer::setDefaultParameters() {
+	fullscreen = false;
+	Vsync = false;
+	FPS_limit_default = 60;
+	FPS_limit = FPS_limit_default;
+	
+	radius_multiplier = liquid_shader ? 8 : 1;
+	colour_momentum = 0.67f;
+
+	dp_particles = true;
+	dp_segments = true;
+	dp_worldGrid = false;
+	dp_worldBorder = true;
+	dp_FPS = true;
+}
+
+
 void Renderer::update_display() {
 // std::cout << "Renderer::update_display" << std::endl;
+	display_time.Start();
 	sf::RenderStates state;
 
-	window.setView(worldView);
 	window.clear(background);
-
-	if (dp_particles) {
-		update_particle_vertices();
-		state.texture = &particle_texture;
-		state.shader = &particle_shader;
+	
+	if (followed) {
+		worldView.setCenter(sf::Vector2f(followed->position[0], followed->position[1]));
 	}
-	if (dp_segments) update_segment_vertices();
+
+	if (dp_worldBorder) window.draw(world_vertices);
+	if (interacting) {
+		user_interact_zone.setPosition(sf::Vector2f(particle_sim.user_point[0] - particle_sim.range, particle_sim.user_point[1] - particle_sim.range));
+		window.draw(user_interact_zone);
+	}
 	if (dp_worldGrid) {
 		update_grid_vertices_colour();
 		window.draw(worldGrid_vertices);
 	}
-	if (dp_particles) window.draw(particle_vertices, state);
-	if (dp_segments) window.draw(segment_vertices, &segment_shader);
-	window.draw(world_vertices);
+	if (dp_particles) {
+		update_particle_vertices();
+		state.texture = &particle_texture;
+		state.shader = &particle_shader;
+		window.draw(particle_vertices, state);
+	}
+	if (dp_segments) {
+		update_segment_vertices();
+		window.draw(segment_vertices, &segment_shader);
+	}
+	
+	if (dp_FPS) {
+		window.setView(GUIView);
+		window.draw(FPS_display);
+	}
+	window.setView(worldView);
+
 	window.display();
+	float time = display_time.Tick_fine(false);
+
+	if (dp_FPS && time) {
+		std::stringstream oss;
+		oss << std::fixed << std::setprecision(3);
+    oss << "Display  time : " << time << " ms\n";
+    oss << "Sim loop time : " << particle_sim.get_average_loop_time() << " ms";
+    // oss << "Display  time : " << (uint32_t)(time*1000)/1000. << "\tms\n";
+    // oss << "Sim loop time : " << (uint32_t)(particle_sim.get_average_loop_time()*1000)/1000. << "\tms";
+		FPS_display.setString(oss.str());
+	}
 }
 
 
 void Renderer::update_particle_vertices() {
 	// std::cout << "Renderer::draw_particles" << std::endl;
-	float pr = liquid_shader ? 8 : 1.05; // padding_ratio
+	float size = particle_sim.radii *radius_multiplier;
 	float quad[4][2] = {
-		-particle_sim.radii *pr,	-particle_sim.radii *pr,
-		 particle_sim.radii *pr,	-particle_sim.radii *pr,
-		 particle_sim.radii *pr,	 particle_sim.radii *pr,
-		-particle_sim.radii *pr,	 particle_sim.radii *pr,
+		-size,	-size,
+		 size,	-size,
+		 size,	 size,
+		-size,	 size,
 	};
 	uint8_t r, g, b;
-	float color_momentum = 0.3f; // how much of the new colour is taken in
 	
 	for (uint32_t p=0; p<particle_sim.get_active_part(); p++) {
 		float norm = sqrt(particle_sim.particle_array[p].speed[0]*particle_sim.particle_array[p].speed[0] + particle_sim.particle_array[p].speed[1]*particle_sim.particle_array[p].speed[1]);
-		norm = std::max(0.f, norm-4);
+		norm = std::max(20.f, norm);
 		norm /= 100;
-		r = particle_vertices[4*p].color.r;
-		r = r*(1-color_momentum) + color_momentum*255* std::min(norm, 1.f);
-		g = particle_vertices[4*p].color.g;
-		g = g*(1-color_momentum) + color_momentum*255* std::min(norm/4, 1.f);
-		b = particle_vertices[4*p].color.b;
-		b = b*(1-color_momentum) + color_momentum*255* std::min(norm/8, 1.f);
+		r = particle_vertices[4*p].color.r*colour_momentum + (1-colour_momentum)*255* std::min(norm, 1.f);
+		g = particle_vertices[4*p].color.g*colour_momentum + (1-colour_momentum)*255* std::min(norm/4, 1.f);
+		b = particle_vertices[4*p].color.b*colour_momentum + (1-colour_momentum)*255* std::min(norm/8, 1.f);
+
 		for (uint8_t i=0; i<4; i++) {
 			particle_vertices[4*p+i].position.x = particle_sim.particle_array[p].position[0] + quad[i][0];
 			particle_vertices[4*p+i].position.y = particle_sim.particle_array[p].position[1] + quad[i][1];
@@ -135,6 +199,8 @@ void Renderer::update_particle_vertices() {
 				particle_vertices[4*p+i].color.b = b;
 			}
 			particle_vertices[4*p+i].color.a = 255;
+			
+			// particle_vertices[4*p+i].color = sf::Color::White;
 		}
 	}
 	for (uint32_t p=particle_sim.get_active_part(); p<NB_PART; p++) {
@@ -180,23 +246,22 @@ void Renderer::update_grid_vertices_init() {
 	}
 }
 
+sf::Color saturation_color = sf::Color::White; // I had enough of redeclaring this each time. Although I don't know if this would have been optimised by the compiler.
+
 void Renderer::update_grid_vertices_colour() {
 	World& world = particle_sim.world;
 	if (world.gsm_trylock()) {
-		sf::Color error_color = sf::Color::White;
 		uint32_t index = 0;
 		sf::Color color;
 		for (uint16_t y=0; y<world.getGridSize(1); y++) {
 			for (uint16_t x=0; x<world.getGridSize(0); x++) {
 				uint8_t nb_parts = world.getCell(x, y).nb_parts.load();
 				uint8_t nb_segs = world.sig() ? world.getCell_seg(x, y).nb_segs : 0;
-				// std::cout << x << ", " << y << " : segment in grid=" << b2s(world.segments_in_grid) << " donc nb_segs=" << (short)nb_segs << "   nb_parts=" << (short)nb_parts << std::endl;
 	
-				if (nb_parts < MAX_PART_CELL+1 && nb_segs < MAX_SEG_CELL+1) {
+				if (nb_parts < MAX_PART_CELL && nb_segs < MAX_SEG_CELL) {
 					color.r = 0;
 					color.g = 255* ((float)nb_parts / MAX_PART_CELL);
 					color.b = 255* ((float)nb_segs / MAX_SEG_CELL);
-					// std::cout << "\tcb=" << (short)color.b << std::endl;
 					color.a = 255;
 	
 					// worldGrid_vertices[index   ].color = color;
@@ -204,11 +269,10 @@ void Renderer::update_grid_vertices_colour() {
 					// worldGrid_vertices[index +2].color = color;
 					worldGrid_vertices[index +3].color = color;
 				} else {
-					// std::cout << "\tRender detects cell overloading " << x << ", " << y << "  :  parts=" << (short)nb_parts << ",  nb_segs=" << (short)nb_segs << std::endl;
 					// worldGrid_vertices[index   ].color = error_color;
-					worldGrid_vertices[index +1].color = error_color;
+					worldGrid_vertices[index +1].color = saturation_color;
 					// worldGrid_vertices[index +2].color = error_color;
-					worldGrid_vertices[index +3].color = error_color;
+					worldGrid_vertices[index +3].color = saturation_color;
 				}
 				index += 4;
 			}

@@ -10,6 +10,7 @@ So this is kind of a revenge on this previous project and I hope to make a truly
 - Multi-threading of the simulation
 - A thread for displaying and event handling
 - Use of shaders
+- Better interactivity  
 - Not being a mess (no garantee)
 
 ## UI
@@ -23,8 +24,9 @@ So this is kind of a revenge on this previous project and I hope to make a truly
 **suppr :** if some particles are selected : delete them  
 **F :** toggles fullscreen  
 **H :** reset to home view  
-**Ctrl+H :** reset particles position  
-**K :** toggles display of Particles  
+**Ctrl+H :** reset particles position and speed  
+**P :** toggles display of Particles  
+**J :** toggles display of the World's borders  
 **L :** toggles display of Segments  
 **M :** toggles display of World's grid  
 **S :** take a screenshot (saving it as result_images/screenshot.png)  
@@ -34,6 +36,7 @@ So this is kind of a revenge on this previous project and I hope to make a truly
 **right mouse and drag :** move around the view  
 
 **left mouse** on a particle to select it.  
+**left mouse + D** on a particle to follow it (doesn't select the particle).  
 **left mouse and drag :** move around selected particle  
 **left ctrl** to _not_ unselect already selected particles when left clicking
 

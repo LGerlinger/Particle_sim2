@@ -15,3 +15,13 @@ inline void print_vect(std::string name, int8_t vect[2]) {
 }
 
 inline std::string b2s(bool b) {return b ? "true" : "false";}
+
+inline std::string i2s(unsigned long number) {
+	std::string str = std::to_string(number);
+	int n = str.length() - 3;
+	while (n > 0) {
+		str.insert(n, " ");
+		n -= 3;
+	}
+	return str;
+}

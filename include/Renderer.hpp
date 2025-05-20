@@ -1,5 +1,6 @@
 #pragma once
 
+#include "Consometer.hpp"
 #include "Particle_simulator.hpp"
 
 #include <SFML/Window.hpp>
@@ -12,15 +13,18 @@ class Renderer {
 private :
 	sf::RenderWindow window;
 	sf::View worldView; //< View to display objects relative to the simulation
-	// sf::View GUIView; //< View to display objects relative to the GUI
+	sf::View GUIView; //< View to display objects relative to the GUI
 
 	Particle_simulator& particle_sim;
 	sf::VertexArray particle_vertices;
 	sf::Texture particle_texture;
 	sf::VertexArray segment_vertices;
 	sf::VertexArray worldGrid_vertices;
-	sf::RectangleShape world_vertices;
+	sf::RectangleShape world_vertices; //< The rectangle of the world
+	sf::CircleShape user_interact_zone;
 
+	sf::Font font;
+	sf::Text FPS_display;
 	sf::Color background = sf::Color::Black;
 
 	bool liquid_shader = false;
@@ -28,8 +32,28 @@ private :
 	sf::Glsl::Vec4 particle_color = sf::Glsl::Vec4(0.25f, 0.88f, 0.88f, 1.f); //< Colour to apply on all Particles should their individual colour be ignored (e.g. liquid shader is used)
 	sf::Shader segment_shader;
 
-	bool fullscreen = false;
-	bool Vsync = false;
+	Consometre display_time;
+
+	// ======== PARAMETERS ========
+private :
+	bool fullscreen;
+	bool Vsync;
+	uint16_t FPS_limit_default;
+
+public :
+	void setDefaultParameters();
+	float radius_multiplier;
+	float colour_momentum; //< For Particles : how much of the previous colour is kept.
+
+	bool dp_particles;
+	bool dp_segments;
+	bool dp_worldGrid;
+	bool dp_worldBorder;
+	bool dp_FPS;
+	// ======== END PARAMETERS ========
+
+	// I don't really consider this a parameter as its more about showing the state of the interaction
+	bool interacting = false;
 
 public :
 	/**
@@ -38,8 +62,8 @@ public :
 	Renderer(Particle_simulator& particle_sim_);
 	~Renderer();
 
-	uint16_t FPS_limit = 1;
-	void slowFPS(bool slow) {FPS_limit = slow ? 30 : 60;};
+	uint16_t FPS_limit;
+	void slowFPS(bool slow) {FPS_limit = slow ? 30 : FPS_limit_default;};
 
 	/**
 	* @brief Updates then display vertices, using shaders
@@ -91,9 +115,7 @@ public :
 	*/
 	void takeScreenShot();
 
-	bool dp_particles = true;
-	bool dp_segments = true;
-	bool dp_worldGrid = false;
+	Particle* followed = nullptr;
 	// Toggles the displaying of the grid.
 	void toggle_grid();
 };

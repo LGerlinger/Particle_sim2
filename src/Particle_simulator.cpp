@@ -1,5 +1,6 @@
 #include "Particle_simulator.hpp"
 #include "Segment.hpp"
+#include "utilities.hpp"
 
 #include <cmath>
 #include <cstdlib>
@@ -10,17 +11,20 @@
 Particle_simulator::Particle_simulator() : world(1800, 1000, 2*radii, 2*radii, NB_PART) {
 	std::cout << "Particle_simulator::Particle_simulator()" << std::endl;
 	initialize_particles();
+	setDefaultParameters();
 
 	world.seg_array.reserve(2);
 	world.add_segment(100, 100, 900, 500);
 	world.add_segment(1700, 300, 700, 800);
 
+	// world.add_segment(4100, 1900, 4000, 2000);
+	// world.add_segment(4100, 2100, 4000, 2000);
+
 	world.chg_seg_store_sys(nb_active_part);
 
-	grav_center[0] = world.getSize(0)/2;
-	grav_center[1] = world.getSize(1)/2;
-
-	std::cout << "\tsize Particle array : " << sizeof(particle_array) << " bytes" << std::endl;
+	std::cout << "\t" << i2s(world.n_cell_seg) << " cells with a segment" << std::endl;
+	std::cout << "\t" << i2s(NB_PART) << " particles" << std::endl;
+	std::cout << "\tsize Particle array : " << i2s(sizeof(particle_array)) << " bytes" << std::endl;
 	// std::cout << "End Particle_simulator::Particle_simulator()" << std::endl;
 }
 
@@ -31,10 +35,36 @@ Particle_simulator::~Particle_simulator() {
 	stop_simulation_threads();
 }
 
+void Particle_simulator::setDefaultParameters() {
+	masses = 1;
+	dt = 0.001;
+	spawn_speed[0] = 0;
+	spawn_speed[1] = 0;
+
+	grav_force = 1000;
+	grav_force_decay = 0.01f;
+	grav_center[0] = world.getSize(0)/2;
+	grav_center[1] = world.getSize(1)/2;
+	static_speed_block = 1;
+	fluid_friction_coef = 0.3;
+
+	// User forces
+	userForce appliedForce = userForce::None;
+	user_point[0] = 0;
+	user_point[1] = 0;
+	translation_force = 3000;
+	rotation_force = 1000;
+	range = 200;
+	deletion_order = false;
+
+	cs = 1;
+}
+
 void Particle_simulator::initialize_particles() {
 	nb_active_part = NB_PART;
 	uint16_t x=0,y=0;
 	for (uint32_t i=0; i<NB_PART; i++) {
+		// Spawning in an ordered ractangle formation
 		// particle_array[i].position[0] = x* world.getCellSize(0) + radii;
 		// particle_array[i].position[1] = y* world.getCellSize(1) + radii;
 		// if (++x==world.getGridSize(0)) {
@@ -42,11 +72,17 @@ void Particle_simulator::initialize_particles() {
 		// 	y++;
 		// }
 
+		// random spawning
 		particle_array[i].position[0] = (float)rand()/RAND_MAX * (world.getSize(0) - 4*radii) + 2*radii;
 		particle_array[i].position[1] = (float)rand()/RAND_MAX * (world.getSize(1) - 4*radii) + 2*radii;
+		particle_array[i].speed[0] = spawn_speed[0];
+		particle_array[i].speed[1] = spawn_speed[1];
 		
-		particle_array[i].speed[0] = 0;
-		particle_array[i].speed[1] = 0;
+		// For collision testing purposes
+		// particle_array[i].position[0] = i ? 30 : 10;
+		// particle_array[i].position[1] = 100;
+		// particle_array[i].speed[0] = i ? -500 : 0;
+		// particle_array[i].speed[1] = i ? 0 : 0;
 	}
 }
 
@@ -71,16 +107,16 @@ void Particle_simulator::simulation_thread(uint8_t th_id) {
 	// std::cout << "Particle_simulator::simulation_thread()" << std::endl;
 	uint32_t nppt; // number of particles per thread
 	uint32_t sub_nppt;
-
-	bool first_loop = true;
+	uint8_t num_fun;
 
 	threadHandler.synchronize_last(MAX_THREAD_NUM, 1, this, &Particle_simulator::pause_wait); // This is here only to make so the simulation can start paused before looping once.
 
 	if (!th_id) {
 		conso.start_perf_check("average sim loop", 20000);
-		conso2.start_perf_check("Collision segments", 20000);
+		conso2.start_perf_check("Collision particles", 20000);
 	}
 	while (simulate) {
+		num_fun = 0;
 		// Synchronize & do stuff that shouldn't be done by multiple threads, like changing the number of Particles
 		threadHandler.synchronize_last(MAX_THREAD_NUM, 1, this, &Particle_simulator::create_destroy_wait);
 		nppt = nb_active_part/MAX_THREAD_NUM; // number of particles per thread +- 1
@@ -88,7 +124,7 @@ void Particle_simulator::simulation_thread(uint8_t th_id) {
 		
 		// Filling the grid
 		auto bound_update_grid_particle_contenance = std::bind(&World::update_grid_particle_contenance, &world, particle_array, std::placeholders::_1, std::placeholders::_2, dt);
-		threadHandler.load_repartition(bound_update_grid_particle_contenance, 1, nb_active_part, sub_nppt);
+		threadHandler.load_repartition(bound_update_grid_particle_contenance, num_fun++, nb_active_part, sub_nppt);
 
 
 		// Simulation -- applying forces and collisions
@@ -96,47 +132,50 @@ void Particle_simulator::simulation_thread(uint8_t th_id) {
 			case userForce::None:
 				break;
 			case userForce::Translation:
-				threadHandler.load_repartition(this, &Particle_simulator::attraction, 2, nb_active_part, sub_nppt);
+				threadHandler.load_repartition(this, &Particle_simulator::attraction, num_fun++, nb_active_part, sub_nppt);
 				break;
 			case userForce::Rotation:
-				threadHandler.load_repartition(this, &Particle_simulator::rotation, 2, nb_active_part, sub_nppt);
+				threadHandler.load_repartition(this, &Particle_simulator::rotation, num_fun++, nb_active_part, sub_nppt);
 				break;
 			case userForce::Vortex:
-				threadHandler.load_repartition(this, &Particle_simulator::vortex, 2, nb_active_part, sub_nppt);
+				threadHandler.load_repartition(this, &Particle_simulator::vortex, num_fun++, nb_active_part, sub_nppt);
 				break;
 		}
 
-		// threadHandler.load_repartition(this, &Particle_simulator::point_gravity, 3, nb_active_part, sub_nppt);
-		threadHandler.load_repartition(this, &Particle_simulator::gravity, 4, nb_active_part, sub_nppt);
-		// threadHandler.load_repartition(this, &Particle_simulator::static_friction, 5, nb_active_part, sub_nppt);
-		// threadHandler.load_repartition(this, &Particle_simulator::vibrate, 6, nb_active_part, sub_nppt);
-		// threadHandler.load_repartition(this, &Particle_simulator::fluid_friction, 7, nb_active_part, sub_nppt);
+		// threadHandler.load_repartition(this, &Particle_simulator::point_gravity, num_fun++, nb_active_part, sub_nppt);
+		// threadHandler.load_repartition(this, &Particle_simulator::point_gravity_invSquared, num_fun++, nb_active_part, sub_nppt);
+		threadHandler.load_repartition(this, &Particle_simulator::gravity, num_fun++, nb_active_part, sub_nppt);
+		// threadHandler.load_repartition(this, &Particle_simulator::vibrate, num_fun++, nb_active_part, sub_nppt);
+		// threadHandler.load_repartition(this, &Particle_simulator::fluid_friction, num_fun++, nb_active_part, sub_nppt);
+
 
 		if (!th_id) conso2.Start();
+		threadHandler.load_repartition(this, &Particle_simulator::collision_pp_grid, num_fun++, nb_active_part, sub_nppt);
+		if (!th_id) conso2.Tick_fine(true);
+
 		if (world.sig()) {
-			threadHandler.load_repartition(this, &Particle_simulator::collision_pl_grid, 14, nb_active_part, sub_nppt);
+			threadHandler.load_repartition(this, &Particle_simulator::comparison_ps_grid, num_fun++, nb_active_part, sub_nppt);
 		} else {
 			for (uint16_t i=0; i<world.seg_array.size(); i++) {
-				auto bound_collision_pl_grid = std::bind(&Particle_simulator::collision_lp_grid, this, std::placeholders::_1, std::placeholders::_2, i);
-				threadHandler.load_repartition(bound_collision_pl_grid, 14+i, world.seg_array[i].cells.size(), 20);
+				auto bound_collision_pl_grid = std::bind(&Particle_simulator::comparison_sp_grid, this, std::placeholders::_1, std::placeholders::_2, i);
+				threadHandler.load_repartition(bound_collision_pl_grid, num_fun++, world.seg_array[i].cells.size(), 20);
 			}
 		}
-		if (!th_id) conso2.Tick_fine();
 		
-		// threadHandler.load_repartition(this, &Particle_simulator::collision_pp, 8, nb_active_part, sub_nppt);
-		threadHandler.load_repartition(this, &Particle_simulator::collision_pp_grid_threaded, 9, nb_active_part, sub_nppt);
-		// threadHandler.load_repartition(this, &Particle_simulator::collision_pp_glue, 10, nb_active_part, sub_nppt);
+		threadHandler.load_repartition(this, &Particle_simulator::world_borders, num_fun++, nb_active_part, sub_nppt);
+		// threadHandler.load_repartition(this, &Particle_simulator::world_borders_rebound, num_fun++, nb_active_part, sub_nppt);
+		// threadHandler.load_repartition(this, &Particle_simulator::world_loop, num_fun++, nb_active_part, sub_nppt);
 
-		threadHandler.load_repartition(this, &Particle_simulator::world_borders, 11, nb_active_part, sub_nppt);
+		// threadHandler.load_repartition(this, &Particle_simulator::static_friction, num_fun++, nb_active_part, sub_nppt);
 
 		// updating position
 		threadHandler.synchronize_last(MAX_THREAD_NUM, 1, this, &Particle_simulator::pause_wait);
-		threadHandler.load_repartition(this, &Particle_simulator::update_pos, 12, nb_active_part, sub_nppt);
+		threadHandler.load_repartition(this, &Particle_simulator::update_pos, num_fun++, nb_active_part, sub_nppt);
 
 		// Removing the particles from the grid, thus preparing for the next loop
-		if (world.emptying_blindly()) threadHandler.load_repartition(&world, &World::empty_grid_particle_blind, 0, world.getGridSize(1), world.getGridSize(1)/MAX_THREAD_NUM/2);
+		if (world.emptying_blindly()) threadHandler.load_repartition(&world, &World::empty_grid_particle_blind, num_fun++, world.getGridSize(1), world.getGridSize(1)/MAX_THREAD_NUM/2);
 		else {
-			threadHandler.load_repartition(&world, &World::empty_grid_particle_pbased, 0, nb_active_part, sub_nppt);
+			threadHandler.load_repartition(&world, &World::empty_grid_particle_pbased, num_fun++, nb_active_part, sub_nppt);
 		}
 	}
 }
@@ -190,10 +229,18 @@ void Particle_simulator::simulation_thread2(uint8_t th_id) {
 		// updating speed
 
 		// collision_pp(p_start, p_end);
-		collision_pp_grid_threaded(p_start, p_end);
+		collision_pp_grid(p_start, p_end);
 		// collision_pp_glue(p_start, p_end);
 
-		collision_pl_grid(p_start, p_end);
+		if (world.sig()) comparison_ps_grid(p_start, p_end);
+		else {
+			for (uint16_t i=0; i<world.seg_array.size(); i++) {
+				uint32_t nspt = world.seg_array[i].cells.size() / MAX_THREAD_NUM;
+				uint32_t c_start= i   *nspt;
+				uint32_t c_end = (i+1)*nspt;
+				comparison_sp_grid(c_start, c_end, i);
+			}
+		}
 		world_borders(p_start, p_end);
 
 		// Simulation -- displacement
@@ -214,7 +261,7 @@ void Particle_simulator::loop_wait() {
 * @details I had to split loop_wait in 2 so I could change where I pause the simulation relative to emptying the world grid.
 */
 void Particle_simulator::pause_wait() {
-	conso.Tick_fine();
+	conso.Tick_fine(true);
 	while (simulate && paused && !step && !quickstep) {
 		std::this_thread::sleep_for(std::chrono::milliseconds(50));
 	}
@@ -238,8 +285,10 @@ void Particle_simulator::create_destroy_wait() {
 	}
 	if (0.01f * radii < time[0] - time[1]) {
 		time[1] = time[0];
-		create_particle(world.getSize(0)/2-200, 100, 800 * cos(-2*time[0]), 800 * sin(-2*time[0]));
-		create_particle(world.getSize(0)/2+200, 100, -800 * cos(-2*time[0]), 800 * sin(-2*time[0]));
+		// create_particle(0, rand()%(uint16_t)world.getSize(1), spawn_speed[0], spawn_speed[1]); // Spawn on the left border
+		create_particle(world.getSize(0)/2-200, 100,  800 * cos(2*time[0]), -800 * sin(2*time[0])); // Spawn fountain
+		create_particle(world.getSize(0)/2+200, 100, -800 * cos(2*time[0]), -800 * sin(2*time[0])); // Spawn fountain
+
 	}
 }
 
@@ -265,15 +314,8 @@ void Particle_simulator::collision_pp(uint32_t p_start, uint32_t p_end) {
 				vec[0] = particle_array[p2].position[0] + particle_array[p2].speed[0]*dt - particle_array[p1].position[0] - particle_array[p1].speed[0]*dt;
 				vec[1] = particle_array[p2].position[1] + particle_array[p2].speed[1]*dt - particle_array[p1].position[1] - particle_array[p1].speed[1]*dt;
 				dist = sqrt(vec[0]*vec[0] + vec[1]*vec[1]);
-				vec[0] /= dist;
-				vec[1] /= dist;
-	
-				if (dist < 2*radii) {
-					particle_array[p1].speed[0] -= vec[0] * (2*radii - dist) /dt *collision_coef;
-					particle_array[p1].speed[1] -= vec[1] * (2*radii - dist) /dt *collision_coef;
-					particle_array[p2].speed[0] += vec[0] * (2*radii - dist) /dt *collision_coef;
-					particle_array[p2].speed[1] += vec[1] * (2*radii - dist) /dt *collision_coef;
-				}
+				
+				collision_pp_base(p1, p2, dist, vec);
 			}
 
 		}
@@ -281,58 +323,170 @@ void Particle_simulator::collision_pp(uint32_t p_start, uint32_t p_end) {
 }
 
 
-void Particle_simulator::collision_pp_grid_threaded(uint32_t p_start, uint32_t p_end) {
-	// std::cout << "Particle_simulator::collision_pp_grid_threaded()" << std::endl;
+void Particle_simulator::collision_pp_grid(uint32_t p_start, uint32_t p_end) {
+	cs = 1;
 	uint16_t dPos[2];
 	float next_pos[2];
 	float vec[2];
 	float dist;
-	float collision_coef = 0.49f;
-	float temp_coef;
-	uint32_t part2;
+	uint32_t p2;
 	uint16_t x, y;
-	int8_t min_x, max_x, min_y, max_y;
-	for (uint8_t i=1; i<2; i++) { // start at i=0 for a more stable simulation
-		for (uint32_t p1=p_start; p1<p_end; p1++) {
-			
-			next_pos[0] = particle_array[p1].position[0] + i*particle_array[p1].speed[0]*dt;
-			next_pos[1] = particle_array[p1].position[1] + i*particle_array[p1].speed[1]*dt;
-			x = next_pos[0] / world.getCellSize(0);
-			y = next_pos[1] / world.getCellSize(1);
-			min_x = -1*(x!=0);
-			min_y = -1*(y!=0);
-			max_x = x>world.getGridSize(0)-2 ? 1-2*(x != world.getGridSize(0)-1) : 2;
-			max_y = y>world.getGridSize(1)-2 ? 1-2*(y != world.getGridSize(1)-1) : 2;
-	
-	
-			for (int8_t dy=min_y; dy<max_y; dy++) {
-				dPos[1] = y + dy;
-				for (int8_t dx=min_x; dx<max_x; dx++) {
-					dPos[0] = x + dx;
-					uint8_t parts = world.getCell(dPos[0], dPos[1]).nb_parts;
-					for (uint8_t p2=0; p2<parts; p2++) {
-						part2 = world.getCell(dPos[0], dPos[1]).parts[p2];
-						if (p1 != part2) {
-							vec[0] = particle_array[part2].position[0] + i*particle_array[part2].speed[0]*dt - next_pos[0];
-							vec[1] = particle_array[part2].position[1] + i*particle_array[part2].speed[1]*dt - next_pos[1];
-							dist = sqrt(vec[0]*vec[0] + vec[1]*vec[1]);
+	uint16_t min_x, max_x, min_y, max_y;
+	for (uint32_t p1=p_start; p1<p_end; p1++) {
+		next_pos[0] = particle_array[p1].position[0] + particle_array[p1].speed[0]*dt;
+		next_pos[1] = particle_array[p1].position[1] + particle_array[p1].speed[1]*dt;
+		x = next_pos[0] / world.getCellSize(0);
+		y = next_pos[1] / world.getCellSize(1);
+		// std::cout << "coord = " << x << ", " << y << std::endl;
+		min_x = std::max(x-cs, 0);
+		min_y = std::max(y-cs, 0);
+		max_x = std::min((uint16_t)(x+cs+1), world.getGridSize(0));
+		max_y = std::min((uint16_t)(y+cs+1), world.getGridSize(1));
+		// std::cout << "x [" << min_x << ", " << max_x << "]   y [" << min_y << ", " << max_y << "]" << std::endl;
 
-							temp_coef = (2*radii - dist) * collision_coef /(dt * dist) /2;
-							vec[0] *= temp_coef;
-							vec[1] *= temp_coef;
-				
-							if (dist < 2*radii) {
-								particle_array[p1].speed[0] -= vec[0];
-								particle_array[p1].speed[1] -= vec[1];
-								particle_array[part2].speed[0] += vec[0];
-								particle_array[part2].speed[1] += vec[1];
-							}
-						}
+		for (dPos[1]=min_y; dPos[1]<max_y; dPos[1]++) {
+			for (dPos[0]=min_x; dPos[0]<max_x; dPos[0]++) {
+				// print_vect("dPos", dPos);
+				Cell& cell = world.getCell(dPos[0], dPos[1]);
+				for (uint8_t part2=0; part2<cell.nb_parts; part2++) {
+					p2 = cell.parts[part2];
+					if (p1 != p2) {
+
+						vec[0] = particle_array[p2].position[0] + particle_array[p2].speed[0]*dt - next_pos[0];
+						vec[1] = particle_array[p2].position[1] + particle_array[p2].speed[1]*dt - next_pos[1];
+						dist = sqrt(vec[0]*vec[0] + vec[1]*vec[1]);
+						// std::cout << "Comparing " << p1 << " with " << p2 << " : dits=" << dist;
+						// print_vect("vec", vec);
+						
+						// appel fonction
+						collision_pp_base(p1, p2, dist, vec);
+						// collision_pp_glue(p1, p2, dist, vec);
+						// collision_pp_pĥyacc(p1, p2, dist, vec);
 					}
-	
 				}
+				
 			}
+		}
+		// std::cout << std::endl;
+
+	}
+}
+
+
+void Particle_simulator::collision_pp_base(uint32_t p1, uint32_t p2, float dist, float vec[2]) {
+	if (dist < 2*radii) {
+		float collision_coef = 0.45f;
+		float temp_coef;
+
+		temp_coef = (2*radii - dist) * collision_coef /(dt * dist);
+		vec[0] *= temp_coef;
+		vec[1] *= temp_coef;
+
+		particle_array[p1].speed[0] -= vec[0];
+		particle_array[p1].speed[1] -= vec[1];
+		particle_array[p2].speed[0] += vec[0];
+		particle_array[p2].speed[1] += vec[1];
+	}
+}
+
+void Particle_simulator::collision_pp_glue(uint32_t p1, uint32_t p2, float dist, float vec[2]) {
+	float collision_coef = 0.49f;
+	float glue_coef = 0.0005f;
+	float temp_coef;
+
+	temp_coef = (2*radii - dist) * collision_coef /(dt * dist);
+	temp_coef = dist < 2*radii ? temp_coef*collision_coef : temp_coef * glue_coef;
+	vec[0] *= temp_coef;
+	vec[1] *= temp_coef;
+
+	particle_array[p1].speed[0] -= vec[0];
+	particle_array[p1].speed[1] -= vec[1];
+	particle_array[p2].speed[0] += vec[0];
+	particle_array[p2].speed[1] += vec[1];
+}
+
+void Particle_simulator::collision_pp_pĥyacc(uint32_t p1, uint32_t p2, float dist, float rho[2]) {
+	if (dist < 2*radii) {
+		// Normalize the radial vector
+		rho[0] /= dist;
+		rho[1] /= dist;
+		// normal tangent vector
+		float tau[2] = {-rho[1], rho[0]};
+
+		// this only serv to verify Energy and momentum are conserved. So it's commented out during actual use 
+		// float Energy[2];
+		// Energy[0] = (particle_array[p1].speed[0]*particle_array[p1].speed[0] + particle_array[p1].speed[1]*particle_array[p1].speed[1] +
+		//              particle_array[p2].speed[0]*particle_array[p2].speed[0] + particle_array[p2].speed[1]*particle_array[p2].speed[1])/2;
+		// float momentum[2][2];
+		// momentum[0][0] = particle_array[p1].speed[0] + particle_array[p2].speed[0];
+		// momentum[0][1] = particle_array[p1].speed[1] + particle_array[p2].speed[1];
+		
+		// Calculate speeds along rho and tau (changing base basically)
+		// We focus on radial speed to make the collision problem 1-dimensional
+		float v1[2] = // v1.rho * rho + v1.tau * tau
+		{particle_array[p1].speed[0]*rho[0] + particle_array[p1].speed[1]*rho[1],
+		 particle_array[p1].speed[0]*tau[0] + particle_array[p1].speed[1]*tau[1]};
+		float v2[2] = // v2.rho * rho + v2.tau * tau
+		{particle_array[p2].speed[0]*rho[0] + particle_array[p2].speed[1]*rho[1],
+		 particle_array[p2].speed[0]*tau[0] + particle_array[p2].speed[1]*tau[1]};
+
+
+		// std::cout << "v1p=" << v1[0] << ",  v2p=" << v2[0] << "   diff=" << v2[0]-v1[0] << std::endl;
+		if (v2[0] - v1[0] < 0) { // if p1 and p2 are getting closer
+
+			// Calculating Energy (E) and momentum (P)
+			float E = (v1[0]*v1[0] + v2[0]*v2[0]) /2; // E = (m1*v1*v1 + m2*v2*v2)/2
+			float P = v1[0] + v2[0]; // P = m1*v1 + m2*v2
+
+			// Conservation of Enegy gives a second degree equation
+			float A = 1; // A = m2*m2 * (1/m1 + 1/m2)/2
+			float B = -P * 1; // B = -P*m2/m1
+			float C = P*P/2 - E; // C = P*P/(2*m1) - E
+			float delta = B*B-4*A*C; // delta > 0 <=> v1.p!=v2.p so I don't care
+
+			// Choose a new vp so it is different from the first one
+			float newVp2;
+			newVp2 = (-B+sqrt(delta))/(2*A); // vp' = (-B+-sqrt(delta)) / 2A
+			if (std::abs(newVp2 - v2[0]) < 0.01) { // we chose the same vp2
+				// std::cout << "\tneed for change of sign" << std::endl;
+				newVp2 = (-B-sqrt(delta))/(2*A);
+			}
+			float newVp1 = P-newVp2; // v1p' = (P -m2*v2'.p)/m1
+			// print_vect("newVp", newVp);
 	
+			// v1 = v1p'*rho + v1t*tau
+			particle_array[p1].speed[0] = newVp1*rho[0] + v1[1]*tau[0];
+			particle_array[p1].speed[1] = newVp1*rho[1] + v1[1]*tau[1];
+			// v2 = v2p'*rho + v2t*tau
+			particle_array[p2].speed[0] = newVp2*rho[0] + v2[1]*tau[0];
+			particle_array[p2].speed[1] = newVp2*rho[1] + v2[1]*tau[1];
+			
+	
+			// Energy[1] = (particle_array[p1].speed[0]*particle_array[p1].speed[0] + particle_array[p1].speed[1]*particle_array[p1].speed[1] +
+			// 						 particle_array[p2].speed[0]*particle_array[p2].speed[0] + particle_array[p2].speed[1]*particle_array[p2].speed[1])/2;
+	
+			// momentum[1][0] = particle_array[p1].speed[0] + particle_array[p2].speed[0];
+			// momentum[1][1] = particle_array[p1].speed[1] + particle_array[p2].speed[1];
+	
+			// std::cout << "Avant-après" << std::endl;
+			// print_vect("E", Energy);
+			// print_vect("P-av", momentum[0]);
+			// print_vect("P-ap", momentum[1]);
+			// std::cout << std::endl;
+		}
+
+		else { // p1 and p2 are relatively either immobile or getting further
+			float collision_coef = 1;
+			float temp_coef;
+
+			temp_coef = (2*radii - dist) * collision_coef;
+			rho[0] *= temp_coef;
+			rho[1] *= temp_coef;
+
+			particle_array[p1].speed[0] -= rho[0];
+			particle_array[p1].speed[1] -= rho[1];
+			particle_array[p2].speed[0] += rho[0];
+			particle_array[p2].speed[1] += rho[1];
 		}
 	}
 }
@@ -341,82 +495,17 @@ void Particle_simulator::collision_pp_grid_threaded(uint32_t p_start, uint32_t p
 
 void Particle_simulator::collision_pl(uint32_t p_start, uint32_t p_end) {
 	// std::cout << "Particle_simulator::collision_pl()" << std::endl;
-	float vec[2];
-	float AB[2], AC[2];
-	float AB_dim[2];
-	float normABsq;
-	float temp;
-	float min[2], max[2];
-	float part_next_pos[2];
-	std::vector<Segment>& seg_array = world.seg_array;
-	for (uint32_t s=0; s<seg_array.size(); s++) {
-		AB[0] = seg_array[s].pos[1][0] - seg_array[s].pos[0][0];
-		AB[1] = seg_array[s].pos[1][1] - seg_array[s].pos[0][1];
-		normABsq = AB[0]*AB[0] + AB[1]*AB[1];
-		AB_dim[0] = AB[0]/normABsq;
-		AB_dim[1] = AB[1]/normABsq;
-
-		min[0] = std::min(seg_array[s].pos[0][0], seg_array[s].pos[1][0]);
-		max[0] = std::max(seg_array[s].pos[0][0], seg_array[s].pos[1][0]);
-		min[1] = std::min(seg_array[s].pos[0][1], seg_array[s].pos[1][1]);
-		max[1] = std::max(seg_array[s].pos[0][1], seg_array[s].pos[1][1]);
-
+	for (uint32_t s=0; s<world.seg_array.size(); s++) {
 		for (uint32_t p=p_start; p<p_end; p++) {
-			part_next_pos[0] = particle_array[p].position[0] + particle_array[p].speed[0]*dt;
-			part_next_pos[1] = particle_array[p].position[1] + particle_array[p].speed[1]*dt;
-
-			AC[0] = part_next_pos[0] - seg_array[s].pos[0][0];
-			AC[1] = part_next_pos[1] - seg_array[s].pos[0][1];
-			
-			// Calculating AP = (AC.AB)/||AB||² * AB
-			temp = AC[0]*AB_dim[0] + AC[1]*AB_dim[1];
-			vec[0] = temp * AB[0];
-			vec[1] = temp * AB[1];
-
-			// Calculating OP : OP = OA + AP
-			vec[0] = vec[0] + seg_array[s].pos[0][0];
-			vec[1] = vec[1] + seg_array[s].pos[0][1];
-
-			if (min[0] <= vec[0] && vec[0] <= max[0] && min[1] <= vec[1] && vec[1] <= max[1]) { // P is in [AB]
-				// Calculating CP : CP = CO + OP = OP - OC
-				vec[0] = vec[0] - part_next_pos[0];
-				vec[1] = vec[1] - part_next_pos[1];
-				temp = sqrt(vec[0]*vec[0] + vec[1]*vec[1]); // ||CP||
-
-				if (temp < radii) { // Collision
-					vec[0] /= temp;
-					vec[1] /= temp;
-					particle_array[p].speed[0] -= vec[0] * (radii - temp) /dt;
-					particle_array[p].speed[1] -= vec[1] * (radii - temp) /dt;
-				}
-			}
-			else { // P is not in [AB] but the particle might still be near the edges A or B
-				for (uint8_t i=0; i<2; i++) {
-					vec[0] = seg_array[s].pos[i][0] - part_next_pos[0];
-					vec[1] = seg_array[s].pos[i][1] - part_next_pos[1];
-					temp = sqrt(vec[0]*vec[0] + vec[1]*vec[1]); // ||CX||
-
-					if (temp < radii) { // Collision
-						vec[0] /= temp;
-						vec[1] /= temp;
-						particle_array[p].speed[0] -= vec[0] * (radii - temp) /dt;
-						particle_array[p].speed[1] -= vec[1] * (radii - temp) /dt;
-					}
-				}
-			}
+			check_collision_ps(p, s);
 		}
 
 	}
 }
 
-void Particle_simulator::collision_pl_grid(uint32_t p_start, uint32_t p_end) {
-	// std::cout << "Particle_simulator::collision_pl_grid()" << std::endl;
-	float vec[2];
-	float AC[2];
-	float scal;
-	float part_next_pos[2];
+void Particle_simulator::comparison_ps_grid(uint32_t p_start, uint32_t p_end) {
+	// std::cout << "Particle_simulator::comparison_ps_grid()" << std::endl;
 	uint16_t x, y;
-	std::vector<Segment>& seg_array = world.seg_array;
 	for (uint32_t p=p_start; p<p_end; p++) {
 		x = particle_array[p].position[0] / world.getCellSize(0);
 		y = particle_array[p].position[1] / world.getCellSize(1);
@@ -424,174 +513,91 @@ void Particle_simulator::collision_pl_grid(uint32_t p_start, uint32_t p_end) {
 		if (x < world.getGridSize(0) && y < world.getGridSize(1)) {
 			Cell_seg& cell = world.getCell_seg(x, y);
 			for (uint8_t seg=0; seg<cell.nb_segs; seg++) {
-				uint16_t s = cell.segs[seg];
-
-				part_next_pos[0] = particle_array[p].position[0] + particle_array[p].speed[0]*dt;
-				part_next_pos[1] = particle_array[p].position[1] + particle_array[p].speed[1]*dt;
-
-				AC[0] = part_next_pos[0] - seg_array[s].pos[0][0];
-				AC[1] = part_next_pos[1] - seg_array[s].pos[0][1];
-				
-				// AP = (AC.AB)/||AB||² * AB = [(AC.AB)/||AB|| * AB/||AB||]
-				scal = AC[0]*seg_array[s].vect_norm[0] + AC[1]*seg_array[s].vect_norm[1];
-				vec[0] = scal * seg_array[s].vect_norm[0];
-				vec[1] = scal * seg_array[s].vect_norm[1];
-
-				// Calculating OP : OP = OA + AP
-				vec[0] = vec[0] + seg_array[s].pos[0][0];
-				vec[1] = vec[1] + seg_array[s].pos[0][1];
-
-				if (seg_array[s].min[0] <= vec[0] && vec[0] <= seg_array[s].max[0] && seg_array[s].min[1] <= vec[1] && vec[1] <= seg_array[s].max[1]) { // P is in [AB]
-					// Calculating CP : CP = CO + OP = OP - OC
-					vec[0] = vec[0] - part_next_pos[0];
-					vec[1] = vec[1] - part_next_pos[1];
-					scal = sqrt(vec[0]*vec[0] + vec[1]*vec[1]); // ||CP||
-
-					if (scal < radii) { // Collision
-						if (scal==0) break;
-						vec[0] /= scal;
-						vec[1] /= scal;
-						particle_array[p].speed[0] -= vec[0] * (radii - scal) /dt;
-						particle_array[p].speed[1] -= vec[1] * (radii - scal) /dt;
-					}
-				}
-				else { // P is not in [AB] but the particle might still be near the edges A or B
-					for (uint8_t i=0; i<2; i++) {
-						vec[0] = seg_array[s].pos[i][0] - part_next_pos[0];
-						vec[1] = seg_array[s].pos[i][1] - part_next_pos[1];
-						scal = sqrt(vec[0]*vec[0] + vec[1]*vec[1]); // ||CX||
-
-						if (scal < radii) { // Collision
-							vec[0] /= scal;
-							vec[1] /= scal;
-							if (scal==0) break;
-							particle_array[p].speed[0] -= vec[0] * (radii - scal) /dt;
-							particle_array[p].speed[1] -= vec[1] * (radii - scal) /dt;
-						}
-					}
-				}
+				check_collision_ps(p, cell.segs[seg]);
 			}
 		}
 	}
 }
 
-
-void Particle_simulator::collision_lp_grid(uint32_t c_start, uint32_t c_end, uint16_t seg_num) {
-	// std::cout << "Particle_simulator::collision_pl_grid(" << c_start << ", " << c_end << ", " << seg_num << ")" << std::endl;
-	float vec[2];
-	float AC[2];
-	float scal;
-	float part_next_pos[2];
-	uint16_t x, y;
+void Particle_simulator::comparison_sp_grid(uint32_t c_start, uint32_t c_end, uint16_t seg_num) {
+	// std::cout << "Particle_simulator::comparison_sp_grid(" << c_start << ", " << c_end << ", " << seg_num << ")" << std::endl;
 	Segment& segment = world.seg_array[seg_num];
-	// std::cout << "collision pl2,  segment " << seg_num << " : " << c_start << ", " << c_end << "  vec=" << segment.vect_norm[0] << ", " << segment.vect_norm[1] << std::endl;
 	for (uint32_t c=c_start; c<c_end; c++) {
 		Cell& cell = world.getCell(segment.cells[c][0], segment.cells[c][1]);
-
-		// std::cout << "\t" << "cell [" << segment.cells[c][0] << ", " << segment.cells[c][1] << "]  contient " << (short)cell.nb_parts << " particules" << std::endl;
 		for (uint8_t p_c=0; p_c<cell.nb_parts; p_c++) {
-			uint32_t p = cell.parts[p_c];
-			// std::cout << "\t\t" << (short)p_c << " : " << p << std::endl;
-	
-			part_next_pos[0] = particle_array[p].position[0] + particle_array[p].speed[0]*dt;
-			part_next_pos[1] = particle_array[p].position[1] + particle_array[p].speed[1]*dt;
-	
-			AC[0] = part_next_pos[0] - segment.pos[0][0];
-			AC[1] = part_next_pos[1] - segment.pos[0][1];
-			
-			scal = AC[0]*segment.vect_norm[0] + AC[1]*segment.vect_norm[1];
-			vec[0] = scal * segment.vect_norm[0];
-			vec[1] = scal * segment.vect_norm[1];
-	
-			// Calculating OP : OP = OA + AP
-			vec[0] = vec[0] + segment.pos[0][0];
-			vec[1] = vec[1] + segment.pos[0][1];
-	
-			if (segment.min[0] <= vec[0] && vec[0] <= segment.max[0] && segment.min[1] <= vec[1] && vec[1] <= segment.max[1]) { // P is in [AB]
-				// Calculating CP : CP = CO + OP = OP - OC
-				vec[0] = vec[0] - part_next_pos[0];
-				vec[1] = vec[1] - part_next_pos[1];
-				scal = sqrt(vec[0]*vec[0] + vec[1]*vec[1]); // ||CP||
-	
-				if (scal < radii) { // Collision
-					if (scal==0) break;
-					vec[0] /= scal;
-					vec[1] /= scal;
-					particle_array[p].speed[0] -= vec[0] * (radii - scal) /dt;
-					particle_array[p].speed[1] -= vec[1] * (radii - scal) /dt;
-				}
-			}
-			else { // P is not in [AB] but the particle might still be near the edges A or B
-				for (uint8_t i=0; i<2; i++) {
-					vec[0] = segment.pos[i][0] - part_next_pos[0];
-					vec[1] = segment.pos[i][1] - part_next_pos[1];
-					scal = sqrt(vec[0]*vec[0] + vec[1]*vec[1]); // ||CX||
-	
-					if (scal < radii) { // Collision
-						if (scal==0) break;
-						vec[0] /= scal;
-						vec[1] /= scal;
-						particle_array[p].speed[0] -= vec[0] * (radii - scal) /dt;
-						particle_array[p].speed[1] -= vec[1] * (radii - scal) /dt;
-					}
-				}
-			}
+			check_collision_ps(cell.parts[p_c], seg_num);
 		}
 	}
 }
 
+void Particle_simulator::check_collision_ps(uint32_t p, uint16_t s) {
+	Segment& seg = world.seg_array[s];
+	float part_next_pos[2] = {
+		part_next_pos[0] = particle_array[p].position[0] + particle_array[p].speed[0]*dt,
+		part_next_pos[1] = particle_array[p].position[1] + particle_array[p].speed[1]*dt
+	};
 
+	float AP[2] = {
+		AP[0] = part_next_pos[0] - seg.pos[0][0],
+		AP[1] = part_next_pos[1] - seg.pos[0][1]
+	};
+	
+	// AC = (AP.AB)/||AB||² * AB = [(AP.AB)/||AB|| * AB/||AB||]
+	float scal = AP[0]*seg.vect_norm[0] + AP[1]*seg.vect_norm[1];
+	float vec[2] = {
+		vec[0] = scal * seg.vect_norm[0],
+		vec[1] = scal * seg.vect_norm[1]
+	};
 
-void Particle_simulator::collision_pp_glue(uint32_t p_start, uint32_t p_end) {
-	uint16_t dPos[2];
-	float next_pos[2];
-	float vec[2];
-	float dist;
-	float collision_coef = 0.45f;
-	float glue_coef = 0.0005f;
-	float temp_coef;
-	uint32_t part2;
-	uint16_t x, y;
-	int8_t min_x, max_x, min_y, max_y;
-	uint8_t cs = 2; // check_size : how far (in cells) the particle while check for other particles
-	for (uint32_t p1=p_start; p1<p_end; p1++) {
-		next_pos[0] = particle_array[p1].position[0] + particle_array[p1].speed[0]*dt;
-		next_pos[1] = particle_array[p1].position[1] + particle_array[p1].speed[1]*dt;
-		x = next_pos[0] / world.getCellSize(0);
-		y = next_pos[1] / world.getCellSize(1);
-		min_x = -(x<cs ? x : cs);
-		min_y = -(y<cs ? y : cs);
-		max_x = x>world.getGridSize(0)-1 -cs ? (x >= world.getGridSize(0) ? -cs : world.getGridSize(0) -x) : cs;
-		max_y = y>world.getGridSize(1)-1 -cs ? (y >= world.getGridSize(1) ? -cs : world.getGridSize(1) -y) : cs;
-		for (int8_t dy=min_y; dy<max_y; dy++) {
-			dPos[1] = y + dy;
-			for (int8_t dx=min_x; dx<max_x; dx++) {
-				dPos[0] = x + dx;
-				
-				for (uint8_t p2=0; p2<world.getCell(dPos[0], dPos[1]).nb_parts; p2++) {
-					part2 = world.getCell(dPos[0], dPos[1]).parts[p2];
-					if (p1 != part2) {
+	// Calculating OC : OC = OA + AC
+	vec[0] = vec[0] + seg.pos[0][0];
+	vec[1] = vec[1] + seg.pos[0][1];
 
-						vec[0] = particle_array[part2].position[0] + particle_array[part2].speed[0]*dt - particle_array[p1].position[0] - particle_array[p1].speed[0]*dt;
-						vec[1] = particle_array[part2].position[1] + particle_array[part2].speed[1]*dt - particle_array[p1].position[1] - particle_array[p1].speed[1]*dt;
-						dist = sqrt(vec[0]*vec[0] + vec[1]*vec[1]);
-						temp_coef = (2*radii - dist) * collision_coef /(dt * dist);
-						temp_coef = dist < 2*radii ? temp_coef*collision_coef : temp_coef * glue_coef;
-						vec[0] *= temp_coef;
-						vec[1] *= temp_coef;
-			
-						particle_array[p1].speed[0] -= vec[0];
-						particle_array[p1].speed[1] -= vec[1];
-						particle_array[part2].speed[0] += vec[0];
-						particle_array[part2].speed[1] += vec[1];
-					}
-				}
-
-			}
+	if (seg.min[0] <= vec[0] && vec[0] <= seg.max[0] && seg.min[1] <= vec[1] && vec[1] <= seg.max[1]) { // C is in [AB]
+		// Calculating PC : PC = PO + OC = OC - OP
+		vec[0] = vec[0] - part_next_pos[0];
+		vec[1] = vec[1] - part_next_pos[1];
+		collision_ps_base(p, vec);
+		// collision_ps_rebound(p, vec);
+	}
+	else { // C is not in [AB] but the particle might still be near the edges A or B
+		for (uint8_t i=0; i<2; i++) {
+			// The collision point could then be an end of the Segment
+			vec[0] = seg.pos[i][0] - part_next_pos[0];
+			vec[1] = seg.pos[i][1] - part_next_pos[1];
+			collision_ps_base(p, vec);
+			// collision_ps_rebound(p, vec);
 		}
-
 	}
 }
+
+void Particle_simulator::collision_ps_base(uint32_t p, float PC[2]) {
+	float scal = sqrt(PC[0]*PC[0] + PC[1]*PC[1]); // ||CX||
+
+	if (scal < radii) { // Collision
+		scal += 0.00001f; // to avoid scal=0
+		scal = (radii - scal) / (dt*scal);
+		particle_array[p].speed[0] -= PC[0] * scal;
+		particle_array[p].speed[1] -= PC[1] * scal;
+	}
+}
+
+void Particle_simulator::collision_ps_rebound(uint32_t p, float PC[2]) {
+	float scal = sqrt(PC[0]*PC[0] + PC[1]*PC[1]); // ||CX||
+
+	if (scal < radii) { // Collision
+		// Normalize PC (as in ||PC|| = 1);
+		PC[0] /= scal;
+		PC[1] /= scal;
+		// Calculate normal speed (in regard of the Segment)
+		float normal_speed = particle_array[p].speed[0]*PC[0] + particle_array[p].speed[1]*PC[1]; // vp = v.PC
+		normal_speed = std::max(0.f, normal_speed);
+		particle_array[p].speed[0] -= 2* PC[0] *normal_speed;
+		particle_array[p].speed[1] -= 2* PC[1] *normal_speed;
+	}
+}
+
+
 
 
 void Particle_simulator::world_borders(uint32_t p_start, uint32_t p_end) {
@@ -609,14 +615,48 @@ void Particle_simulator::world_borders(uint32_t p_start, uint32_t p_end) {
 	}
 }
 
-void Particle_simulator::world_loop(uint32_t p_start, uint32_t p_end) {
+
+void Particle_simulator::world_borders_rebound(uint32_t p_start, uint32_t p_end) {
+	float vec[2];
+	bool in[2];
 	for (uint32_t p1=p_start; p1<p_end; p1++) {
 		for (uint8_t i=0; i<2; i++) {
-			if (particle_array[p1].position[i] < 0) {
-				particle_array[p1].position[i] += world.getSize(i);
-			} else if (world.getSize(i) < particle_array[p1].position[i]) {
-				particle_array[p1].position[i] -= world.getSize(i);
+			vec[i] = particle_array[p1].position[i] + particle_array[p1].speed[i]*dt;
+			if (vec[i] < radii && particle_array[p1].speed[i] < 0) {
+				particle_array[p1].position[i] = radii;
+				particle_array[p1].speed[i] = -particle_array[p1].speed[i];
+			} else if (world.getSize(i) - radii < vec[i] && particle_array[p1].speed[i] > 0) {
+				particle_array[p1].position[i] = world.getSize(i) - radii;
+				particle_array[p1].speed[i] = -particle_array[p1].speed[i];
 			}
+		}
+	}
+}
+
+void Particle_simulator::world_loop(uint32_t p_start, uint32_t p_end) {
+	float vec[2];
+	for (uint32_t p1=p_start; p1<p_end; p1++) {
+		// teleporting from right to left
+		if (world.getSize(0) < particle_array[p1].position[0]) {
+			particle_array[p1].position[0] -= world.getSize(0);
+			particle_array[p1].position[1] = ((float)rand()/RAND_MAX) * world.getSize(1);
+			particle_array[p1].speed[0] = spawn_speed[0];
+			particle_array[p1].speed[1] = spawn_speed[1];
+		}
+
+		// left, top and bottom borders
+		vec[0] = particle_array[p1].position[0] + particle_array[p1].speed[0]*dt;
+		if (vec[0] < radii && particle_array[p1].speed[0] < 0) { // left
+			particle_array[p1].position[0] = radii;
+			particle_array[p1].speed[0] = -particle_array[p1].speed[0];
+		}
+		vec[1] = particle_array[p1].position[1] + particle_array[p1].speed[1]*dt;
+		if (vec[1] < radii && particle_array[p1].speed[1] < 0) { // top
+			particle_array[p1].position[1] = radii;
+			particle_array[p1].speed[1] = -particle_array[p1].speed[1];
+		} else if (world.getSize(1) - radii < vec[1] && particle_array[p1].speed[1] > 0) { // bottom
+			particle_array[p1].position[1] = world.getSize(1) - radii;
+			particle_array[p1].speed[1] = -particle_array[p1].speed[1];
 		}
 	}
 }
@@ -638,27 +678,40 @@ void Particle_simulator::delete_NaNs(uint32_t p_start, uint32_t p_end) {
 void Particle_simulator::gravity(uint32_t p_start, uint32_t p_end) {
 	// std::cout << "Particle_simulator::gravity()" << std::endl;
 	for (uint32_t p=p_start; p<p_end; p++) {
-		particle_array[p].speed[1] += 1000*dt;
+		particle_array[p].speed[1] += grav_force*dt;
 	}
 }
 
 void Particle_simulator::point_gravity(uint32_t p_start, uint32_t p_end) {
 	// std::cout << "Particle_simulator::point_gravity()" << std::endl;
 	float vec[2];
-	float dist;
-	float temp;
+	float multiplier;
 
 	for (uint32_t p=p_start; p<p_end; p++) {
 		vec[0] = grav_center[0] - particle_array[p].position[0];
 		vec[1] = grav_center[1] - particle_array[p].position[1];
-		dist = sqrt(vec[0]*vec[0] + vec[1]*vec[1]);
-		temp = atan(dist) / dist;
-		temp = temp * temp;
-		vec[0] *= dist*temp;
-		vec[1] *= dist*temp;
+		multiplier = sqrt(vec[0]*vec[0] + vec[1]*vec[1]);
+		multiplier = dt* grav_force / multiplier;
 	
-		particle_array[p].speed[0] += vec[0] * 1000 *dt;
-		particle_array[p].speed[1] += vec[1] * 1000 *dt;
+		particle_array[p].speed[0] += vec[0] * multiplier;
+		particle_array[p].speed[1] += vec[1] * multiplier;
+	}
+}
+
+void Particle_simulator::point_gravity_invSquared(uint32_t p_start, uint32_t p_end) {
+	// std::cout << "Particle_simulator::point_gravity()" << std::endl;
+	float vec[2], norm;
+	float multiplier;
+
+	for (uint32_t p=p_start; p<p_end; p++) {
+		vec[0] = grav_center[0] - particle_array[p].position[0];
+		vec[1] = grav_center[1] - particle_array[p].position[1];
+		norm = sqrt(vec[0]*vec[0] + vec[1]*vec[1]) * grav_force_decay;
+		multiplier = atan(norm) / norm;
+		multiplier = grav_force * multiplier * multiplier *dt / norm;
+	
+		particle_array[p].speed[0] += vec[0] * multiplier;
+		particle_array[p].speed[1] += vec[1] * multiplier;
 	}
 }
 
@@ -672,21 +725,25 @@ void Particle_simulator::static_friction(uint32_t p_start, uint32_t p_end) {
 		vec[0] = particle_array[p].speed[0];
 		vec[1] = particle_array[p].speed[1];
 		norm = sqrt(vec[0]*vec[0] + vec[1]*vec[1]);
-		particle_array[p].speed[0] = (norm<1) ? 0 : particle_array[p].speed[0];
-		particle_array[p].speed[1] = (norm<1) ? 0 : particle_array[p].speed[1];
+		if (norm < static_speed_block*dt) {
+			particle_array[p].speed[0] = 0;
+			particle_array[p].speed[1] = 0;
+		}
 	}
 }
 
 
 void Particle_simulator::fluid_friction(uint32_t p_start, uint32_t p_end) {
 	// std::cout << "Particle_simulator::fluid_friction()" << std::endl;
+	float multiplier;
 	for (uint32_t p=p_start; p<p_end; p++) {
-		particle_array[p].speed[0] *= 1-0.3f*dt;
-		particle_array[p].speed[1] *= 1-0.3f*dt;
+		multiplier = 1 - fluid_friction_coef*dt;
+		particle_array[p].speed[0] *= multiplier;
+		particle_array[p].speed[1] *= multiplier;
 	}
 }
 
-void Particle_simulator::vibrate(uint32_t p_start, uint32_t p_end) {
+void Particle_simulator::vibrate(uint32_t p_start, uint32_t p_end) { // This function needs to be done better. I don't like the result
 	int32_t max = 20000;
 	for (uint32_t p=p_start; p<p_end; p++) {
 		particle_array[p].speed[0] += sin(60*(time[0] +p)) * max *dt;

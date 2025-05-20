@@ -10,7 +10,7 @@
 
 
 #define MAX_PART_CELL 4
-#define MAX_SEG_CELL 10
+#define MAX_SEG_CELL 2
 
 /**
 * The world is divided in cells for better performance.
@@ -48,14 +48,14 @@ private :
 
 	uint16_t gridSize[2];
 	float cellSize[2];
-	bool empty_blind = true; //< Whether the world should be emptied blindly or by using filled_coords.
+	bool empty_blind; //< Whether the world should be emptied blindly or by using filled_coords.
 
 	bool segments_in_grid = false; //< Whether the information of which cell each segment goes through is stored in a grid or in the segments.
 
 	Cell* grid = nullptr;
 	uint16_t* filled_coords = nullptr; //< List of grid coordinates where a Particle has been added to the grid. Used like part.x=[2*part_index], part.y=[2*part_index +1]
-	Cell_seg* grid_seg = nullptr;
-	std::mutex grid_seg_mutex;
+	Cell_seg* grid_seg = nullptr; //< A grid for Segments, i.e. each Cell of this grid knows wether a Segment is going though it.
+	std::mutex grid_seg_mutex; //< A mutex locked before adding / removing / changing segments.
 
 	inline void giveCellPart(uint16_t x, uint16_t y, uint32_t part);
 	inline void giveCellSeg(uint16_t x, uint16_t y, uint16_t seg);
@@ -64,8 +64,8 @@ private :
 	inline void giveCellSeg(Cell_seg* cell, uint16_t seg);
 	
 public:
-	std::atomic_uint64_t n_cell_seg = 0;
-	std::vector<Segment> seg_array;
+	std::atomic_uint64_t n_cell_seg = 0; //< Number of Cells with a Segment.
+	std::vector<Segment> seg_array; //< Vector containing all the Segments.
 	inline bool sig() {return segments_in_grid;};
 
 	World(float sizeX, float sizeY, float cellSizeX, float cellSizeY, uint32_t max_particle_used, bool force_empty_pbased = false);
@@ -119,13 +119,12 @@ public:
 	void empty_grid_particle_pbased(uint32_t p_start, uint32_t p_end);
 
 	/**
-	* @brief Empties every cell in the lines in [start, end[ of everything.
+	* @brief Empties every cell in the grid "grille".
 	* @details Really this function doesn't discriminate.
-	* @param start The first line to empty (included).
-	* @param end The last line to empty (excluded).
+	* @param grille Grid to empty.
 	*/
 	template<typename T>
-	void empty_grid(uint32_t start, uint32_t end, T* grille);
+	void empty_grid(T* grille);
 
 	/**
 	* @brief A function to apply fun_over_cell over every Cell the Segment seg traverses.

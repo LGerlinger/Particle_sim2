@@ -31,12 +31,20 @@ void Consometre::Tick_general() {
 }
 
 
-void Consometre::Tick_fine() {
+float Consometre::Tick_fine(bool cout_result) {
 	End();
 	if (++tick == max_tick) {
 		tick = 0;
 		float time = (float)count() / max_tick / 1000000; // ms
-		std::cout << check_name << " : " << time << " ms" << std::endl;
+		if (cout_result) {
+			std::cout << check_name << " : " << time << " ms" << std::endl;
+		}
 		setZero();
+		return time;
 	}
+	return 0;
+}
+
+float Consometre::get_average_perf_now() {
+	return (float)count() / tick / 1000000;
 }

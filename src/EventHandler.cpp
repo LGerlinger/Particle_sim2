@@ -1,5 +1,7 @@
 #include "EventHandler.hpp"
+#include "Particle_simulator.hpp"
 
+#include <SFML/Window/Keyboard.hpp>
 #include <cmath>
 
 
@@ -51,7 +53,13 @@ void EventHandler::loopOverEvents() {
 			case sf::Keyboard::Add :
 				simulator.dt *= 2;
 				break;
+			case sf::Keyboard::Equal :
+				simulator.dt *= 2;
+				break;
 			case sf::Keyboard::Subtract :
+				simulator.dt /= 2;
+				break;
+			case sf::Keyboard::Hyphen :
 				simulator.dt /= 2;
 				break;
 			case sf::Keyboard::LControl :
@@ -71,14 +79,20 @@ void EventHandler::loopOverEvents() {
 				}
 				break;
 			
+			case sf::Keyboard::J :
+				renderer.dp_worldBorder = !renderer.dp_worldBorder;
+				break;
 			case sf::Keyboard::K :
-			renderer.dp_particles = !renderer.dp_particles;
-			break;
+				renderer.dp_FPS = !renderer.dp_FPS;
+				break;
 			case sf::Keyboard::L :
-			renderer.dp_segments = !renderer.dp_segments;
+				renderer.dp_segments = !renderer.dp_segments;
 				break;
 			case sf::Keyboard::M :
 				renderer.toggle_grid();
+				break;
+			case sf::Keyboard::P :
+				renderer.dp_particles = !renderer.dp_particles;
 				break;
 
 			case sf::Keyboard::Delete :
@@ -93,12 +107,6 @@ void EventHandler::loopOverEvents() {
 			default :
 				addPressedKey(event.key.code);
 				break;
-			// case sf::Keyboard::S:
-			//	 if (ctrlPressed) sl.savePos();
-			//	 break;
-			// case sf::Keyboard::C:
-			//	 sl.loadPos();
-			//	 break;
 			}
 			break;
 		
@@ -139,6 +147,7 @@ void EventHandler::loopOverEvents() {
 					initialRightMousePos.x = event.mouseButton.x;
 					initialRightMousePos.y = event.mouseButton.y;
 					initialCenterPos = worldView.getCenter();
+					renderer.followed = nullptr;
 					break;
 				
 				case sf::Mouse::Left :
@@ -146,16 +155,21 @@ void EventHandler::loopOverEvents() {
 					sf::Vector2f worldPos = window.mapPixelToCoords(sf::Mouse::getPosition(window));
 					uint32_t select = searchParticle(worldPos.x, worldPos.y);
 
-					if (!ctrlPressed && selectedPart.size() != 0) { // empty list of selected particles
+					if (!ctrlPressed) { // empty list of selected particles
 						clear_selection();
 					}
 					if (select != NULLPART) { // hit Particle
-						selectedPart.push_back(select);
-						selectedPartInitPos.push_back(simulator.particle_array[select].position[0]);
-						selectedPartInitPos.push_back(simulator.particle_array[select].position[1]);
-						// simulator.particle_array[select].select(true);
-						initialLeftMousePos.x = worldPos.x;
-						initialLeftMousePos.y = worldPos.y;
+						if (sf::Keyboard::isKeyPressed(sf::Keyboard::D)) {
+							renderer.followed = &simulator.particle_array[select];
+						}
+						else {
+							selectedPart.push_back(select);
+							selectedPartInitPos.push_back(simulator.particle_array[select].position[0]);
+							selectedPartInitPos.push_back(simulator.particle_array[select].position[1]);
+							// simulator.particle_array[select].select(true);
+							initialLeftMousePos.x = worldPos.x;
+							initialLeftMousePos.y = worldPos.y;
+						}
 					}
 					else { // no hit
 						if (n_key_pressed) { // another key was pressed
@@ -197,6 +211,7 @@ void EventHandler::loopOverEvents() {
 							}
 							simulator.user_point[0] = worldPos.x;
 							simulator.user_point[1] = worldPos.y;
+							renderer.interacting = true;
 						}
 					}
 					break;
@@ -211,14 +226,15 @@ void EventHandler::loopOverEvents() {
 		}
 			if (event.mouseButton.button == sf::Mouse::Left) {
 				leftMousePressed = false;
-				for (uint8_t k=0; k<MAX_KEYS; k++) {
-					switch (getPressedKey(k)) {
-						default :
-							simulator.deletion_order = false;
-							simulator.appliedForce = Particle_simulator::userForce::None;
-							break;
-					}
-				}
+				simulator.deletion_order = false;
+				simulator.appliedForce = Particle_simulator::userForce::None;
+				renderer.interacting = false;
+				// for (uint8_t k=0; k<MAX_KEYS; k++) {
+				// 	switch (getPressedKey(k)) {
+				// 		default :
+				// 			break;
+				// 	}
+				// }
 			}
 			break;
 
@@ -322,9 +338,6 @@ void EventHandler::update_selection_pos() {
 }
 
 void EventHandler::clear_selection() {
-	// for (uint32_t p=0; p<selectedPart.size(); p++) {
-	// 	simulator.particle_array[selectedPart[p]].select(false);
-	// }
 	selectedPart.clear();
 	selectedPartInitPos.clear();
 }
@@ -333,7 +346,7 @@ uint32_t EventHandler::searchParticle(float x, float y) {
 	uint16_t cell_x, cell_y;
 	float vec[2];
 	float norm;
-	if (simulator.world.getCellCoord_fromPos(x, y, &cell_x, &cell_y)) {
+	if (simulator.world.getCellCoord_fromPos(x, y, &cell_x, &cell_y)) { // point (x, y) is in a cell. So we search the Particles around that Cell
 		uint16_t dPos[2];
 	
 		for (int8_t dy=-1; dy<2; dy++) {
@@ -355,6 +368,15 @@ uint32_t EventHandler::searchParticle(float x, float y) {
 
 					}
 				}
+			}
+		}
+	} else { // Not in a Cell, so we have to search though every Particle (might take long)
+		for (uint32_t p=0; p<simulator.get_active_part(); p++) {
+			vec[0] = x - simulator.particle_array[p].position[0];
+			vec[1] = y - simulator.particle_array[p].position[1];
+			norm = sqrt(vec[0]*vec[0] + vec[1]*vec[1]);
+			if (norm < simulator.radii) {
+				return p;
 			}
 		}
 	}

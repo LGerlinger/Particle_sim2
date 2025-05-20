@@ -17,26 +17,27 @@ World::World(float sizeX, float sizeY, float cellSizeX, float cellSizeY, uint32_
 	gridSize[0] = ceil(sizeX / cellSizeX);
 	gridSize[1] = ceil(sizeY / cellSizeY);
 	grid = new Cell[gridSize[0]*gridSize[1]];
-	std::cout << "\tgridSize :[" << gridSize[0] << ", " << gridSize[1] << "]" << " (" << gridSize[0]*gridSize[1]* sizeof(Cell) << " bytes)" << std::endl;
+	std::cout << "\tgridSize :[" << gridSize[0] << ", " << gridSize[1] << "]" << " (" << i2s(gridSize[0]*gridSize[1]* sizeof(Cell)) << " bytes)" << std::endl;
 	
-	empty_grid(0, gridSize[1], grid);
+	empty_grid(grid);
 	
 	if (segments_in_grid) {
 		grid_seg = new Cell_seg[gridSize[0]*gridSize[1]];
-		empty_grid(0, gridSize[1], grid_seg);
+		empty_grid(grid_seg);
 	}
-	std::cout << "\tsegments_in_grid=" << b2s(segments_in_grid) << " => grid_seg (" << (segments_in_grid)*gridSize[0]*gridSize[1]* sizeof(Cell_seg) << " bytes)" << std::endl;
+	std::cout << "\tsegments_in_grid=" << b2s(segments_in_grid) << " => grid_seg (" << i2s( (segments_in_grid)*gridSize[0]*gridSize[1]* sizeof(Cell_seg) ) << " bytes)" << std::endl;
 
 	if (force_empty_pbased || 2*max_particle_used < gridSize[0]*gridSize[1]) { // Then we consider emptying the grid blindly is less efficient than emptying the cell we know are filled
 		// This is basically trading memory for speed.
 		filled_coords = new uint16_t[max_particle_used*2];
 		memset(filled_coords, 0, max_particle_used*2*sizeof(uint16_t));
 		empty_blind = false;
-	}
-	std::cout << "\tempty_blind=" << b2s(empty_blind) << " => filled_coords (" << (!empty_blind)*max_particle_used*2*sizeof(uint16_t) << " bytes)" << std::endl;
+	} else empty_blind = true;
+	std::cout << "\tempty_blind=" << b2s(empty_blind) << " => filled_coords (" << i2s((!empty_blind)*max_particle_used*2*sizeof(uint16_t) ) << " bytes)" << std::endl;
 }
 
 World::~World() {
+	std::cout << "World::~World" << std::endl;
 	if (grid) delete[] grid;
 	if (filled_coords) delete[] filled_coords;
 	if (grid_seg) delete[] grid_seg;
@@ -129,8 +130,8 @@ void World::empty_grid_particle_pbased(uint32_t p_start, uint32_t p_end) {
 }
 
 template<typename T>
-void World::empty_grid(uint32_t start, uint32_t end, T* grille) {
-	memset(grille, 0, (end-start)*gridSize[0]*sizeof(T)); // It is important to set to 0 padding bits for bit-wise comparisons
+void World::empty_grid(T* grille) {
+	memset(grille, 0, gridSize[0]*gridSize[1]*sizeof(T)); // It is important to set to 0 padding bits for bit-wise comparisons
 }
 
 /**
@@ -352,14 +353,7 @@ void World::add_segment(float Ax, float Ay, float Bx, float By) {
 		c = !c;
 	} while (c);
 
-	// if (pos[0][0] < 0 || size[0] < pos[0][0] ||
-	//     pos[0][1] < 0 || size[1] < pos[0][1] ||
-	//     pos[1][0] < 0 || size[0] < pos[1][0] ||
-	//     pos[1][1] < 0 || size[1] < pos[1][1])
-	// 	{
-
-	// 		std::cout << "\tSegment " << seg_array.size() << " will be added (" << pos[0][0] << ", " << pos[0][1] << "), (" << pos[1][0] << ", " << pos[1][1] << ")" << std::endl;
-	// 	}
+	// std::cout << "\tSegment " << seg_array.size() << " will be added (" << pos[0][0] << ", " << pos[0][1] << "), (" << pos[1][0] << ", " << pos[1][1] << ")" << std::endl;
 
 	grid_seg_mutex.lock();
 	seg_array.emplace_back(pos[0][0], pos[0][1], pos[1][0], pos[1][1]);
@@ -373,7 +367,7 @@ void World::rem_segment(uint16_t index) {
 		if (segments_in_grid) {
 			go_through_segment(index, &World::remCellSeg);
 		} else n_cell_seg.fetch_sub(seg_array[index].cells.size());
-		// seg_array[index].cells.clear();
+
 		seg_array.erase(seg_array.begin() + index);
 		grid_seg_mutex.unlock();
 	}
@@ -392,7 +386,7 @@ void World::chg_seg_store_sys(uint32_t nb_parts) {
 			if (segments_in_grid) { // segment storage -> grid storage
 		
 				grid_seg = new Cell_seg[gridSize[0]*gridSize[1]];
-				empty_grid(0, gridSize[1], grid_seg);
+				empty_grid(grid_seg);
 		
 				for (uint16_t s=0; s<seg_array.size(); s++) {
 					for (auto& coord : seg_array[s].cells) {
@@ -448,7 +442,7 @@ void World::change_cell_part(uint32_t part, float init_pos_x, float init_pos_y, 
 	}
 }
 
-
+// I need to remake this function So that it can handle the new segment grid system
 void World::verify_grid_contenance(uint32_t max_to_be_found, uint32_t p_array_size, uint32_t s_array_size) {
 	/*
 	uint32_t found = 0;
