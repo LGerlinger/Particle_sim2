@@ -11,7 +11,22 @@ So this is kind of a revenge on this previous project and I hope to make a truly
 - A thread for displaying and event handling
 - Use of shaders
 - Better interactivity  
-- Not being a mess (no garantee)
+- Not being a mess (no garantee)  
+
+## Maps & simulation parameters
+**You can now change simualtion and world parameters without looking at the code :**  
+The simultation uses a world and parameters that can be loaded from files.  
+Those files are written in text according to a simple format, so anyone can easily write and change them.  
+The file saves/loading_orders.sli describes if files should be loaded and which ones.  
+If no file is loaded, the simulation will use the default parameters and world written in the code itself.  
+Simulation parameters files are in saves/PSparameters and a few example can be found there.  
+World parameters and contenance files are in saves/Map and a few examples can also be found there.  
+Simulation and world parameters can be loaded independently of each other.  
+Although some combinations might not work well with each other.  
+For example particle radius is often half the size of the world's cells which are often square.  
+**For more clarity** on what each parameter does, you can read the Default parameter files (saves/PSparameters/Default.psp or saves/Map/Default.map).  
+Little precision on saving positions : Saving is done following a mimimum simulation time step corresponding to the time step at the start of the simulation. This way you can decrease the time step without changing the simulation time between 2 consecutive positions saves. This is useful as high speeds don't go well with high time step  
+
 
 ## UI
 **KEYBOARD**  
@@ -22,13 +37,16 @@ So this is kind of a revenge on this previous project and I hope to make a truly
 **+ :** x2 the simulation's timestep (long timesteps can make the simulation unstable)  
 **- :** /2 the simulation's timestep (shorter timesteps make the simulation more stable)  
 **suppr :** if some particles are selected : delete them  
-**F :** toggles fullscreen  
+**F :** toggle fullscreen  
 **H :** reset to home view  
-**Ctrl+H :** reset particles position and speed  
-**P :** toggles display of Particles  
-**J :** toggles display of the World's borders  
-**L :** toggles display of Segments  
-**M :** toggles display of World's grid  
+**Ctrl+H :** reset simulation  
+**P :** toggle display of Particles  
+**O :** toggle display of Zones  
+**J :** toggle display of the World's borders  
+**K :** toggle display of the FPS display  
+**L :** toggle display of Segments  
+**M :** toggle display of World's grid  
+**W :** Toggle all displaying (including camera movement) but not the simulation. This can be used to slightly reduce the strain on the CPU.  
 **S :** take a screenshot (saving it as result_images/screenshot.png)  
 
 **MOUSE**  

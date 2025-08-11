@@ -1,8 +1,9 @@
 #include "EventHandler.hpp"
-#include "Particle_simulator.hpp"
 
 #include <SFML/Window/Keyboard.hpp>
 #include <cmath>
+
+inline void inverse(bool& b) {b = !b;}; 
 
 
 EventHandler::EventHandler(Renderer& renderer_, Particle_simulator& simulator_) :
@@ -42,7 +43,7 @@ void EventHandler::loopOverEvents() {
 				window.close();
 				break;
 			case sf::Keyboard::Space :
-				simulator.paused = !simulator.paused;
+			inverse(simulator.paused);
 				break;
 			case sf::Keyboard::SemiColon :
 				simulator.step = true;
@@ -51,16 +52,16 @@ void EventHandler::loopOverEvents() {
 				simulator.quickstep = true;
 				break;
 			case sf::Keyboard::Add :
-				simulator.dt *= 2;
+				simulator.params.dt *= 2;
 				break;
 			case sf::Keyboard::Equal :
-				simulator.dt *= 2;
+				simulator.params.dt *= 2;
 				break;
 			case sf::Keyboard::Subtract :
-				simulator.dt /= 2;
+				simulator.params.dt /= 2;
 				break;
 			case sf::Keyboard::Hyphen :
-				simulator.dt /= 2;
+				simulator.params.dt /= 2;
 				break;
 			case sf::Keyboard::LControl :
 				ctrlPressed = true;
@@ -72,7 +73,7 @@ void EventHandler::loopOverEvents() {
 				renderer.takeScreenShot();
 				break;
 			case sf::Keyboard::H :
-				if (keyboard.isKeyPressed(sf::Keyboard::LControl)) simulator.initialize_particles();
+				if (keyboard.isKeyPressed(sf::Keyboard::LControl)) simulator.reinitialize_order = true;
 				else {
 					worldView = window.getDefaultView();
 					viewSize = worldView.getSize();
@@ -80,19 +81,25 @@ void EventHandler::loopOverEvents() {
 				break;
 			
 			case sf::Keyboard::J :
-				renderer.dp_worldBorder = !renderer.dp_worldBorder;
+				inverse(renderer.dp_worldBorder);
 				break;
 			case sf::Keyboard::K :
-				renderer.dp_FPS = !renderer.dp_FPS;
+				inverse(renderer.dp_FPS);
 				break;
 			case sf::Keyboard::L :
-				renderer.dp_segments = !renderer.dp_segments;
+				inverse(renderer.dp_segments);
 				break;
 			case sf::Keyboard::M :
 				renderer.toggle_grid();
 				break;
+			case sf::Keyboard::O :
+				inverse(renderer.dp_worldZones);
+				break;
 			case sf::Keyboard::P :
-				renderer.dp_particles = !renderer.dp_particles;
+				inverse(renderer.dp_particles);
+				break;
+			case sf::Keyboard::W :
+				inverse(renderer.enable_displaying);
 				break;
 
 			case sf::Keyboard::Delete :
@@ -160,13 +167,13 @@ void EventHandler::loopOverEvents() {
 					}
 					if (select != NULLPART) { // hit Particle
 						if (sf::Keyboard::isKeyPressed(sf::Keyboard::D)) {
-							renderer.followed = &simulator.particle_array[select];
+							renderer.followed = &simulator[select];
 						}
 						else {
 							selectedPart.push_back(select);
-							selectedPartInitPos.push_back(simulator.particle_array[select].position[0]);
-							selectedPartInitPos.push_back(simulator.particle_array[select].position[1]);
-							// simulator.particle_array[select].select(true);
+							selectedPartInitPos.push_back(simulator[select].position[0]);
+							selectedPartInitPos.push_back(simulator[select].position[1]);
+							// simulator[select].select(true);
 							initialLeftMousePos.x = worldPos.x;
 							initialLeftMousePos.y = worldPos.y;
 						}
@@ -176,35 +183,35 @@ void EventHandler::loopOverEvents() {
 							for (uint8_t k=0; k<MAX_KEYS; k++) {
 								switch (getPressedKey(k)) {
 									case sf::Keyboard::Delete :
-									simulator.range = 200;
-									if (simulator.paused) {
-										simulator.delete_range(worldPos.x, worldPos.y, simulator.range);
-									} else {
-										simulator.deletion_order = true;
-									}
+										simulator.params.range = 200;
+										if (simulator.paused) {
+											simulator.delete_range(worldPos.x, worldPos.y, simulator.params.range);
+										} else {
+											simulator.deletion_order = true;
+										}
 										break;
 									case sf::Keyboard::A :
-										simulator.range = INFINITY;
+										simulator.params.range = INFINITY;
 										simulator.appliedForce = Particle_simulator::userForce::Translation;
 										break;
 									case sf::Keyboard::Z :
-										simulator.range = 200;
+										simulator.params.range = 200;
 										simulator.appliedForce = Particle_simulator::userForce::Translation;
 										break;
 									case sf::Keyboard::E :
-										simulator.range = INFINITY;
+										simulator.params.range = INFINITY;
 										simulator.appliedForce = Particle_simulator::userForce::Rotation;
 										break;
 									case sf::Keyboard::R :
-										simulator.range = 200;
+										simulator.params.range = 200;
 										simulator.appliedForce = Particle_simulator::userForce::Rotation;
 										break;
 									case sf::Keyboard::T :
-										simulator.range = INFINITY;
+										simulator.params.range = INFINITY;
 										simulator.appliedForce = Particle_simulator::userForce::Vortex;
 										break;
 									case sf::Keyboard::Y :
-										simulator.range = 200;
+										simulator.params.range = 200;
 										simulator.appliedForce = Particle_simulator::userForce::Vortex;
 										break;
 								}
@@ -317,20 +324,20 @@ void EventHandler::update_selection_pos() {
 		sf::Vector2f worldPos = window.mapPixelToCoords(sf::Mouse::getPosition(window));
 		float speed[2];
 		for (uint32_t p=0; p<selectedPart.size(); p++) {
-			simulator.particle_array[selectedPart[p]].position[0] = selectedPartInitPos[2*p  ] + worldPos.x - initialLeftMousePos.x;
-			simulator.particle_array[selectedPart[p]].position[1] = selectedPartInitPos[2*p+1] + worldPos.y - initialLeftMousePos.y;
+			simulator[selectedPart[p]].position[0] = selectedPartInitPos[2*p  ] + worldPos.x - initialLeftMousePos.x;
+			simulator[selectedPart[p]].position[1] = selectedPartInitPos[2*p+1] + worldPos.y - initialLeftMousePos.y;
 			
-			speed[0] = simulator.particle_array[selectedPart[p]].position[0] - selectedPartInitPos[2*p  ];
-			speed[1] = simulator.particle_array[selectedPart[p]].position[1] - selectedPartInitPos[2*p+1];
+			speed[0] = simulator[selectedPart[p]].position[0] - selectedPartInitPos[2*p  ];
+			speed[1] = simulator[selectedPart[p]].position[1] - selectedPartInitPos[2*p+1];
 	
-			simulator.particle_array[selectedPart[p]].speed[0] = speed[0] != 0 ? speed[0] /(10*simulator.dt) : simulator.particle_array[selectedPart[p]].speed[0];
-			simulator.particle_array[selectedPart[p]].speed[1] = speed[1] != 0 ? speed[1] /(10*simulator.dt) : simulator.particle_array[selectedPart[p]].speed[1];
+			simulator[selectedPart[p]].speed[0] = speed[0] != 0 ? speed[0] /(10*simulator.params.dt) : simulator[selectedPart[p]].speed[0];
+			simulator[selectedPart[p]].speed[1] = speed[1] != 0 ? speed[1] /(10*simulator.params.dt) : simulator[selectedPart[p]].speed[1];
 	
 			if (simulator.paused) {
-				simulator.world.change_cell_part(selectedPart[p], selectedPartInitPos[2*p], selectedPartInitPos[2*p+1], simulator.particle_array[selectedPart[p]].position[0], simulator.particle_array[selectedPart[p]].position[1]);
+				simulator.world.change_cell_part(selectedPart[p], selectedPartInitPos[2*p], selectedPartInitPos[2*p+1], simulator[selectedPart[p]].position[0], simulator[selectedPart[p]].position[1]);
 			}
-			selectedPartInitPos[2*p  ] = simulator.particle_array[selectedPart[p]].position[0];
-			selectedPartInitPos[2*p+1] = simulator.particle_array[selectedPart[p]].position[1];
+			selectedPartInitPos[2*p  ] = simulator[selectedPart[p]].position[0];
+			selectedPartInitPos[2*p+1] = simulator[selectedPart[p]].position[1];
 			
 		}
 		initialLeftMousePos = worldPos;
@@ -346,7 +353,8 @@ uint32_t EventHandler::searchParticle(float x, float y) {
 	uint16_t cell_x, cell_y;
 	float vec[2];
 	float norm;
-	if (simulator.world.getCellCoord_fromPos(x, y, &cell_x, &cell_y)) { // point (x, y) is in a cell. So we search the Particles around that Cell
+	// std::cout << "search particle."
+	if (simulator.world.getCellCoord_fromPos(x, y, &cell_x, &cell_y) && !simulator.isLoading()) { // point (x, y) is in a cell. So we search the Particles around that Cell
 		uint16_t dPos[2];
 	
 		for (int8_t dy=-1; dy<2; dy++) {
@@ -358,10 +366,10 @@ uint32_t EventHandler::searchParticle(float x, float y) {
 
 						Cell& cell = simulator.world.getCell(dPos[0], dPos[1]);
 						for (uint8_t i=0; i<cell.nb_parts; i++) {
-							vec[0] = x - simulator.particle_array[cell.parts[i]].position[0];
-							vec[1] = y - simulator.particle_array[cell.parts[i]].position[1];
+							vec[0] = x - simulator[cell.parts[i]].position[0];
+							vec[1] = y - simulator[cell.parts[i]].position[1];
 							norm = sqrt(vec[0]*vec[0] + vec[1]*vec[1]);
-							if (norm < simulator.radii) {
+							if (norm < simulator.params.radii) {
 								return cell.parts[i];
 							}
 						}
@@ -370,12 +378,13 @@ uint32_t EventHandler::searchParticle(float x, float y) {
 				}
 			}
 		}
-	} else { // Not in a Cell, so we have to search though every Particle (might take long)
+	} else { // Not in a Cell or Cells aren't being filled, so we have to search though every Particle (might take long)
+		std::cout << "searching\n";
 		for (uint32_t p=0; p<simulator.get_active_part(); p++) {
-			vec[0] = x - simulator.particle_array[p].position[0];
-			vec[1] = y - simulator.particle_array[p].position[1];
+			vec[0] = x - simulator[p].position[0];
+			vec[1] = y - simulator[p].position[1];
 			norm = sqrt(vec[0]*vec[0] + vec[1]*vec[1]);
-			if (norm < simulator.radii) {
+			if (norm < simulator.params.radii) {
 				return p;
 			}
 		}

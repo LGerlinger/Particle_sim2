@@ -2,42 +2,39 @@
 #include "utilities.hpp"
 
 #include <cmath>
-#include <cstdint>
 #include <cstring>
 #include <iostream>
 
 Cell Cell::nullCell;
 
-World::World(float sizeX, float sizeY, float cellSizeX, float cellSizeY, uint32_t max_particle_used, bool force_empty_pbased) {
-	std::cout << "World::World : Size [" << sizeX << ", " << sizeY << "]   cellSize [" << cellSizeX << ", " << cellSizeY << "]" << std::endl;
-	size[0] = sizeX;
-	size[1] = sizeY;
-	cellSize[0] = cellSizeX;
-	cellSize[1] = cellSizeY;
-	gridSize[0] = ceil(sizeX / cellSizeX);
-	gridSize[1] = ceil(sizeY / cellSizeY);
+WorldParam WorldParam::Default {
+	Default.size[0] = 1800,
+	Default.size[1] = 1000,
+	Default.cellSize[0] = 4,
+	Default.cellSize[1] = 4,
+	
+	Rectangle(10, 10, WorldParam::Default.size[0]-20, WorldParam::Default.size[1]-20), //spawn_rect
+};
+
+World::World(WorldParam& parameters) {
+	params = parameters;
+	std::cout << "World::World : Size [" << parameters.size[0] << ", " << parameters.size[1] << "]   cellSize [" << parameters.cellSize[0] << ", " << parameters.cellSize[1] << "]" << std::endl;
+	gridSize[0] = ceil(params.size[0] / params.cellSize[0]);
+	gridSize[1] = ceil(params.size[1] / params.cellSize[1]);
 	grid = new Cell[gridSize[0]*gridSize[1]];
 	std::cout << "\tgridSize :[" << gridSize[0] << ", " << gridSize[1] << "]" << " (" << i2s(gridSize[0]*gridSize[1]* sizeof(Cell)) << " bytes)" << std::endl;
 	
 	empty_grid(grid);
 	
-	if (segments_in_grid) {
-		grid_seg = new Cell_seg[gridSize[0]*gridSize[1]];
-		empty_grid(grid_seg);
-	}
-	std::cout << "\tsegments_in_grid=" << b2s(segments_in_grid) << " => grid_seg (" << i2s( (segments_in_grid)*gridSize[0]*gridSize[1]* sizeof(Cell_seg) ) << " bytes)" << std::endl;
-
-	if (force_empty_pbased || 2*max_particle_used < gridSize[0]*gridSize[1]) { // Then we consider emptying the grid blindly is less efficient than emptying the cell we know are filled
-		// This is basically trading memory for speed.
-		filled_coords = new uint16_t[max_particle_used*2];
-		memset(filled_coords, 0, max_particle_used*2*sizeof(uint16_t));
-		empty_blind = false;
-	} else empty_blind = true;
-	std::cout << "\tempty_blind=" << b2s(empty_blind) << " => filled_coords (" << i2s((!empty_blind)*max_particle_used*2*sizeof(uint16_t) ) << " bytes)" << std::endl;
+	// if (params.segments_in_grid) {
+	// 	grid_seg = new Cell_seg[gridSize[0]*gridSize[1]];
+	// 	empty_grid(grid_seg);
+	// }
+	// std::cout << "\tsegments_in_grid=" << b2s(params.segments_in_grid) << " => grid_seg (" << i2s( (params.segments_in_grid)*gridSize[0]*gridSize[1]* sizeof(Cell_seg) ) << " bytes)" << std::endl;
 }
 
 World::~World() {
-	std::cout << "World::~World" << std::endl;
+	std::cout << "World::~World()" << std::endl;
 	if (grid) delete[] grid;
 	if (filled_coords) delete[] filled_coords;
 	if (grid_seg) delete[] grid_seg;
@@ -45,31 +42,22 @@ World::~World() {
 
 
 Cell* World::getCell_fromPos(float pos_x, float pos_y) {
-	if (0 <= pos_x && pos_x <= size[0] &&
-	    0 <= pos_y && pos_y <= size[1]) {
-		return &grid[(uint16_t)(pos_y/cellSize[1])*gridSize[0] + (uint16_t)(pos_x/cellSize[0])];
+	if (0 <= pos_x && pos_x <= params.size[0] &&
+	    0 <= pos_y && pos_y <= params.size[1]) {
+		return &grid[(uint16_t)(pos_y/params.cellSize[1])*gridSize[0] + (uint16_t)(pos_x/params.cellSize[0])];
 	}
 	else return &Cell::nullCell;
 }
 
 
 bool World::getCellCoord_fromPos(float pos_x, float pos_y, uint16_t* x, uint16_t* y) {
-	if (0 <= pos_x && pos_x <= size[0] &&
-	    0 <= pos_y && pos_y <= size[1]) {
-			*x = (uint16_t)(pos_x/cellSize[0]);
-			*y = (uint16_t)(pos_y/cellSize[1]);
-		return true;
-	}
-	else return false;
+	*x = (uint16_t)(pos_x/params.cellSize[0]);
+	*y = (uint16_t)(pos_y/params.cellSize[1]);
+	return (*x <= params.size[0] && *y <= params.size[1]); // using uint underflow to check for negative position.
 }
 
-std::mutex thatmut;
 void World::giveCellPart(uint16_t x, uint16_t y, uint32_t part) {
-	// std::cout << "giveCellPart(" << x << ", " << y << ", " << part << ")" << std::endl;
-	Cell& cell = getCell(x, y);
-	uint8_t index = cell.nb_parts.load();
-	cell.nb_parts.store(index + (index!=4));
-	cell.parts[index%4] = part;
+	giveCellPart(getCell(x, y), part);
 }
 
 void World::giveCellSeg(uint16_t x, uint16_t y, uint16_t seg) {
@@ -93,18 +81,18 @@ void World::remCellSeg(uint16_t x, uint16_t y, uint16_t seg) {
 				cell.segs[j-1] = cell.segs[j];
 			}
 			cell.nb_segs--;
-			n_cell_seg.fetch_sub(1);
 			return;
 		}
 	}
+	n_cell_seg.fetch_sub(1);
 }
 
 
-void World::giveCellPart(Cell* cell, uint32_t part) {
+void World::giveCellPart(Cell& cell, uint32_t part) {
 	// std::cout << "giveCellPart(" << cell << ", " << part << ")" << std::endl;
-	uint8_t index = cell->nb_parts.load();
-	cell->nb_parts.store(index + (index!=4));
-	cell->parts[index%4] = part;
+	uint8_t index = cell.nb_parts.load();
+	cell.nb_parts.store(index + (index!=MAX_PART_CELL));
+	cell.parts[index%MAX_PART_CELL] = part;
 }
 
 void World::giveCellSeg(Cell_seg* cell, uint16_t seg) {
@@ -113,6 +101,28 @@ void World::giveCellSeg(Cell_seg* cell, uint16_t seg) {
 
 	n_cell_seg.fetch_add(1);
 }
+
+
+bool World::will_use_nParticles(uint32_t max_n) {
+	if (2*max_n < gridSize[0]*gridSize[1]) { // Then we consider emptying the grid blindly is less efficient than emptying the cell we know are filled
+		// This is basically trading memory for speed.
+		filled_coords = new uint16_t[max_n*2];
+		memset(filled_coords, 0, max_n*2*sizeof(uint16_t));
+		empty_blind = false;
+	} else {
+		empty_blind = true;
+		if (filled_coords) {
+			delete[] filled_coords;
+			filled_coords = nullptr;
+		}
+	}
+
+	chg_seg_store_sys(max_n);
+
+	std::cout << "\tempty_blind=" << b2s(empty_blind) << " => filled_coords (" << i2s((!empty_blind)*max_n*2*sizeof(uint16_t) ) << " bytes)" << std::endl;
+	return empty_blind;
+}
+
 
 void World::empty_grid_particle_blind(uint32_t start, uint32_t end) {
 	for (uint16_t y=start; y<end; y++) {
@@ -123,6 +133,7 @@ void World::empty_grid_particle_blind(uint32_t start, uint32_t end) {
 }
 
 void World::empty_grid_particle_pbased(uint32_t p_start, uint32_t p_end) {
+	// std::cout << "World::empty_grid_particle_pbased(" << p_start << ", " << p_end << ")" << std::endl;
 	for (uint32_t p=p_start; p<p_end; p++) {
 		Cell& cell = getCell(filled_coords[2*p], filled_coords[2*p+1]);
 		cell.nb_parts = 0;
@@ -140,16 +151,14 @@ void World::empty_grid(T* grille) {
 * But it comes at the cost of having to remember each Particle position as the speed will probably be changed by next iteration.
 */
 void World::update_grid_particle_contenance(Particle* particle_array, uint32_t p_start, uint32_t p_end, float dt) {
-	// std::cout << "World::update_grid_particle_contenance" << std::endl;
+	// std::cout << "World::update_grid_particle_contenance(" << particle_array << ", " << p_start << ", " << p_end << ", " << dt << ")" << std::endl;
 	uint16_t next_pos[2];
 	for (uint32_t i=p_start; i<p_end; i++) {
-			next_pos[0] = (particle_array[i].position[0] + particle_array[i].speed[0]*dt) / cellSize[0];
-			next_pos[1] = (particle_array[i].position[1] + particle_array[i].speed[1]*dt) / cellSize[1];
+			next_pos[0] = (particle_array[i].position[0] + particle_array[i].speed[0]*dt) / params.cellSize[0];
+			next_pos[1] = (particle_array[i].position[1] + particle_array[i].speed[1]*dt) / params.cellSize[1];
 
 			if (next_pos[0] < gridSize[0] && next_pos[1] < gridSize[1]) {
-			// if (0 <= next_pos[0] && next_pos[0] < gridSize[0] &&
-			//     0 <= next_pos[1] && next_pos[1] < gridSize[1]) {
-				giveCellPart((uint16_t)(next_pos[0]), (uint16_t)(next_pos[1]), i);
+				giveCellPart(next_pos[0], next_pos[1], i);
 				if (!empty_blind) {
 					filled_coords[2*i   ] = next_pos[0];
 					filled_coords[2*i +1] = next_pos[1];
@@ -175,13 +184,13 @@ void World::go_through_segment(uint16_t seg, void(World::*fun_over_cell)(uint16_
 	if (vec[0] == 0 || vec[1] == 0) { // If the Segment is either vertical or horizontal
 		bool isVertical = vec[0] == 0;
 
-		uint16_t min = seg_array[seg].min[isVertical] / cellSize[isVertical] - 0.5;
+		uint16_t min = seg_array[seg].min[isVertical] / params.cellSize[isVertical] - 0.5;
 		min = min < gridSize[isVertical] ? min : 0;
-		uint16_t max = seg_array[seg].max[isVertical] / cellSize[isVertical] + 0.5;
+		uint16_t max = seg_array[seg].max[isVertical] / params.cellSize[isVertical] + 0.5;
 		max = max < gridSize[isVertical] ? max : gridSize[isVertical]-1;
 
 		uint16_t xy[2];
-		xy[!isVertical] = (Ax*isVertical + Ay*!isVertical) / cellSize[!isVertical]; // One coordinate is constant. The !isVertical one.
+		xy[!isVertical] = (Ax*isVertical + Ay*!isVertical) / params.cellSize[!isVertical]; // One coordinate is constant. The !isVertical one.
 		int8_t off_min = -1*(xy[!isVertical]!=0);
 		int8_t off_max = 1+(xy[!isVertical]!=gridSize[!isVertical]-1); // Offset to give the line a width in the Cells (without going out of the grid)
 		for (xy[isVertical]=min; xy[isVertical]<=max; xy[isVertical]++) {
@@ -202,16 +211,16 @@ void World::go_through_segment(uint16_t seg, void(World::*fun_over_cell)(uint16_
 
 		start_pos[0] = Ax;
 		start_pos[1] = Ay;
-		end_coord[0] = Bx / cellSize[0];
-		end_coord[1] = By / cellSize[1];
-		start_coord[0] = start_pos[0] / cellSize[0];
-		start_coord[1] = start_pos[1] / cellSize[1];
+		end_coord[0] = Bx / params.cellSize[0];
+		end_coord[1] = By / params.cellSize[1];
+		start_coord[0] = start_pos[0] / params.cellSize[0];
+		start_coord[1] = start_pos[1] / params.cellSize[1];
 
 		// I need to initialize lengths so I don't have to do multiple checks x_moved ? & y_moved ?
-		dx[0] = x_positive ? (start_coord[0]+1)*cellSize[0] - start_pos[0] : start_coord[0]*cellSize[0] - start_pos[0];
+		dx[0] = x_positive ? (start_coord[0]+1)*params.cellSize[0] - start_pos[0] : start_coord[0]*params.cellSize[0] - start_pos[0];
 		dy[0] = dx[0] / slope;
 		inc_length[0] = sqrt(dx[0]*dx[0] + dy[0]*dy[0]);
-		dy[1] = y_positive ? (start_coord[1]+1)*cellSize[1] - start_pos[1] : start_coord[1]*cellSize[1] - start_pos[1];
+		dy[1] = y_positive ? (start_coord[1]+1)*params.cellSize[1] - start_pos[1] : start_coord[1]*params.cellSize[1] - start_pos[1];
 		dx[1] = dy[1] * slope;
 		inc_length[1] = sqrt(dx[1]*dx[1] + dy[1]*dy[1]);
 
@@ -238,12 +247,12 @@ void World::go_through_segment(uint16_t seg, void(World::*fun_over_cell)(uint16_
 
 			// Calculating next Cell
 			if (x_moved) {
-				dx[0] = x_positive ? (start_coord[0]+1)*cellSize[0] - start_pos[0] : start_coord[0]*cellSize[0] - start_pos[0];
+				dx[0] = x_positive ? (start_coord[0]+1)*params.cellSize[0] - start_pos[0] : start_coord[0]*params.cellSize[0] - start_pos[0];
 				dy[0] = dx[0] / slope;
 				inc_length[0] = sqrt(dx[0]*dx[0] + dy[0]*dy[0]);
 			}
 			else {
-				dy[1] = y_positive ? (start_coord[1]+1)*cellSize[1] - start_pos[1] : start_coord[1]*cellSize[1] - start_pos[1];
+				dy[1] = y_positive ? (start_coord[1]+1)*params.cellSize[1] - start_pos[1] : start_coord[1]*params.cellSize[1] - start_pos[1];
 				dx[1] = dy[1] * slope;
 				inc_length[1] = sqrt(dx[1]*dx[1] + dy[1]*dy[1]);
 			}
@@ -270,10 +279,10 @@ void World::go_through_segment(uint16_t seg, void(World::*fun_over_cell)(uint16_
 
 		}
 
-		// Adding the segment to the cells around the start and end coordinates as this is not taken care of in the while loop
+		// Going through the segment to the cells around the start and end coordinates as this is not taken care of in the while loop
 		bool already_in;
 		uint16_t coord[2][2] = {
-			static_cast<uint16_t>(Ax / cellSize[0]), static_cast<uint16_t>(Ay / cellSize[1]),
+			static_cast<uint16_t>(Ax / params.cellSize[0]), static_cast<uint16_t>(Ay / params.cellSize[1]),
 			end_coord[0], end_coord[1]
 		};
 		for (uint8_t c=0; c<2; c++) {
@@ -315,15 +324,16 @@ void World::go_through_segment(uint16_t seg, void(World::*fun_over_cell)(uint16_
 void World::add_segment(float Ax, float Ay, float Bx, float By) {
 	// std::cout << "Add (" << Ax << ", " << Ay << "), (" << Bx << ", " << By << "), " << std::endl;
 	float pos[2][2] = {Ax, Ay, Bx, By};
-
+	
+	// Correcting Segment coordinates so that it is entirely in the World. If the segment is entirely outside the world, it is not created.
 	bool c=0; // coordinate on which we are working
 	do {
 		if (pos[0][c] == pos[1][c]) { // vertical or horizontal
-			if (pos[0][c] < 0 || size[c] < pos[0][c]) return; // segment entirely outside the world; like -- [  ]
+			if (pos[0][c] < 0 || params.size[c] < pos[0][c]) return; // segment entirely outside the world; like -- [  ]
 			pos[0][!c] = std::max(pos[0][!c], 0.f);
-			pos[0][!c] = std::min(pos[0][!c], size[!c]);
+			pos[0][!c] = std::min(pos[0][!c], params.size[!c]);
 			pos[1][!c] = std::max(pos[1][!c], 0.f);
-			pos[1][!c] = std::min(pos[1][!c], size[!c]);
+			pos[1][!c] = std::min(pos[1][!c], params.size[!c]);
 			if (pos[0][!c] == pos[1][!c]) return; // Segment is entirely outside of the world; like [ __ ]
 																						// This also removes point-like segments
 			// break;
@@ -334,16 +344,16 @@ void World::add_segment(float Ax, float Ay, float Bx, float By) {
 				std::swap(pos[0][0], pos[1][0]);
 				std::swap(pos[0][1], pos[1][1]);
 			}
-			if (pos[1][c] <= 0 || size[c] <= pos[0][c]) return; // -- |  |  OR |  | --
+			if (pos[1][c] <= 0 || params.size[c] <= pos[0][c]) return; // -- |  |  OR |  | --
 			if (pos[0][c] < 0 && 0 < pos[1][c]) { // -|- |
 				// cap A
 				pos[0][!c] = pos[1][!c] + (pos[0][!c]-pos[1][!c])/(pos[0][c]-pos[1][c]) * (0-pos[1][c]);
 				pos[0][c] = 0;
 			}
-			if (pos[0][c] < size[c] && size[c] < pos[1][c]) { // | -|-
+			if (pos[0][c] < params.size[c] && params.size[c] < pos[1][c]) { // | -|-
 				// cap B
-				pos[1][!c] = pos[0][!c] + (pos[1][!c]-pos[0][!c])/(pos[1][c]-pos[0][c]) * (size[c]-pos[0][c]);
-				pos[1][c] = size[c];
+				pos[1][!c] = pos[0][!c] + (pos[1][!c]-pos[0][!c])/(pos[1][c]-pos[0][c]) * (params.size[c]-pos[0][c]);
+				pos[1][c] = params.size[c];
 			}
 			if (inversion) { // exchanging A and B back
 				std::swap(pos[0][c], pos[1][c]);
@@ -379,7 +389,7 @@ void World::chg_seg_store_sys(uint32_t nb_parts) {
 		 (!segments_in_grid && (1.2f* nb_parts < n_cell_seg.load())))
 		{
 		
-			std::cout << "Change in Segment storing system needed : number of Particles = " << nb_parts << ",  while number of Cells with a segment = " << n_cell_seg.load() << std::endl;
+			std::cout << "Change in Segment storing system : number of Particles = " << nb_parts << ",  while number of Cells with a segment = " << n_cell_seg.load() << std::endl;
 			
 			grid_seg_mutex.lock();
 			segments_in_grid = !segments_in_grid;
@@ -398,7 +408,7 @@ void World::chg_seg_store_sys(uint32_t nb_parts) {
 				}
 			}
 			else { // grid storage -> segment storage
-				delete[] grid_seg;
+				if (grid_seg) delete[] grid_seg;
 				grid_seg = nullptr;
 				for (uint16_t s=0; s<seg_array.size(); s++) {
 					go_through_segment(s, &World::giveCellSeg);
@@ -409,35 +419,67 @@ void World::chg_seg_store_sys(uint32_t nb_parts) {
 	}
 }
 
+void World::add_zone(int8_t function, float posX, float posY, float sizeX, float sizeY) {
+	float rect[2][2] = {posX, posY, sizeX+posX, sizeY+posY}; // absolute coordinates, size is also changed if capping coordinates
+	GridCoord gridCoord[2];
+	for (uint8_t c=0; c<2; c++) {
+		for (uint8_t i=0; i<2; i++) {
+			if (rect[i][c]<0) {
+				rect[i][c]=0;
+				gridCoord[i].coord[c] = 0;
+			}
+			else if (params.size[c] <= rect[i][c]) {
+				rect[i][c] = params.size[c];
+				gridCoord[i].coord[c] = gridSize[c];
+			}
+			else {
+				gridCoord[i].coord[c] = std::min( (uint16_t)std::round(rect[i][c]/params.cellSize[c]), gridSize[c] );
+				rect[i][c] = gridCoord[i].coord[c] * params.cellSize[c];
+			}
+		}
+		if (rect[0][c] == rect[1][c]) return; // don't add the zone if its width is null
+		else if (rect[1][c] < rect[0][c]) {
+			std::swap(rect[0][c], rect[1][c]);
+			std::swap(gridCoord[0].coord[c], gridCoord[1].coord[c]);
+		}
+		rect[1][c] = rect[1][c] - rect[0][c];
+	}
+	zone_covered_cells += (gridCoord[1].coord[0] - gridCoord[0].coord[0]) * (gridCoord[1].coord[1] - gridCoord[0].coord[1]);
+	zones.emplace_back(function, rect, gridCoord);
+}
 
 
 void World::change_cell_part(uint32_t part, float init_pos_x, float init_pos_y, float end_pos_x, float end_pos_y) {
-	Cell* cell = getCell_fromPos(init_pos_x, init_pos_y);
-	if (cell->isReal()) {
+	// std::cout << "change cell part" << std::endl;
+	Cell* cell_init = getCell_fromPos(init_pos_x, init_pos_y);
+	Cell* cell_end  = getCell_fromPos(end_pos_x,  end_pos_y);
+	if (cell_init == cell_end) return; // if the start cell and the end cell are the same, we don't need to move the Particle from cell to cell.
+
+	// Removing the Particle from the start Cell
+	if (cell_init->isReal()) {
 		// search the index of the Particle in the Cell
 		uint8_t foundAt = -1;
-		for (uint8_t i=0; i<cell->nb_parts.load(); i++) {
-			if (cell->parts[i] == part){
+		for (uint8_t i=0; i<cell_init->nb_parts.load(); i++) {
+			if (cell_init->parts[i] == part){
 				foundAt = i;
 				break;
 			}
 		}
 		if (foundAt != (uint8_t)-1) { // If Particle is found in the Cell, remove it
-			for (uint8_t i=foundAt+1; i<cell->nb_parts.load(); i++) {
-				cell->parts[i-1] = cell->parts[i];
+			for (uint8_t i=foundAt+1; i<cell_init->nb_parts.load(); i++) {
+				cell_init->parts[i-1] = cell_init->parts[i];
 			}
-			cell->nb_parts.fetch_sub(1);
-			// cell->nb_parts--;
+			cell_init->nb_parts.fetch_sub(1);
+			// cell_init->nb_parts--;
 		}
 	}
 
 	// Adding the Particle in the end Cell
-	cell = getCell_fromPos(end_pos_x, end_pos_y);
-	if (cell->isReal()) {
-		giveCellPart(cell, part);
+	if (cell_end->isReal()) {
+		giveCellPart(*cell_end, part);
 		if (!empty_blind) {
-			filled_coords[2*part   ] = end_pos_x / cellSize[0];
-			filled_coords[2*part +1] = end_pos_y / cellSize[1];
+			filled_coords[2*part   ] = end_pos_x / params.cellSize[0];
+			filled_coords[2*part +1] = end_pos_y / params.cellSize[1];
 		}
 	}
 }

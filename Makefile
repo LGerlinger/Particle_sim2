@@ -36,3 +36,6 @@ again: clean all
 sure: all
 	clear;
 	./particle_sim2
+
+clean_save :
+	rm saves/Map/* saves/PSparameters/* saves/Positions/*

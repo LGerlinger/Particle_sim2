@@ -1,11 +1,11 @@
 #include "Renderer.hpp"
+#include "SaveLoader.hpp"
 #include "Segment.hpp"
 #include "World.hpp"
 
 #include <cmath>
 #include <iomanip>
 #include <iostream>
-#include <string>
 #include <sstream>
 
 Renderer::Renderer(Particle_simulator& particle_sim_) : 
@@ -18,7 +18,7 @@ Renderer::Renderer(Particle_simulator& particle_sim_) :
 
 	// Initializing Particle VertexArray
 	particle_vertices.setPrimitiveType(sf::Quads);
-	particle_vertices.resize(4*NB_PART);
+	particle_vertices.resize(4*particle_sim_.get_max_part());
 
 	if (particle_texture.loadFromFile("disk128x128.png")) {
 		sf::Vector2u texSize = particle_texture.getSize();
@@ -29,7 +29,7 @@ Renderer::Renderer(Particle_simulator& particle_sim_) :
 		  0,									(float)texSize.y
 		};
 
-		for (uint32_t p=0; p<NB_PART; p++) {
+		for (uint32_t p=0; p<particle_sim_.get_max_part(); p++) {
 			for (uint8_t i=0; i<4; i++) {
 				particle_vertices[4*p+i].texCoords.x = quad[i][0];
 				particle_vertices[4*p+i].texCoords.y = quad[i][1];
@@ -50,13 +50,17 @@ Renderer::Renderer(Particle_simulator& particle_sim_) :
 		update_grid_vertices_init();
 	}
 
+	zone_vertices.setPrimitiveType(sf::Quads);
+	zone_vertices.resize(4*particle_sim.world.getNbOfZones());
+	update_zone_vertices();
+
 	world_vertices.setPosition(0, 0);
 	world_vertices.setSize(sf::Vector2f(particle_sim_.world.getSize(0), particle_sim_.world.getSize(1)));
 	world_vertices.setOutlineThickness(2);
 	world_vertices.setOutlineColor(sf::Color::White);
 	world_vertices.setFillColor(sf::Color::Transparent);
 
-	user_interact_zone.setRadius(particle_sim_.range);
+	user_interact_zone.setRadius(particle_sim_.params.range);
 	user_interact_zone.setOutlineThickness(0.75);
 	user_interact_zone.setOutlineColor(sf::Color::White);
 	user_interact_zone.setFillColor(sf::Color::Transparent);
@@ -109,11 +113,15 @@ void Renderer::setDefaultParameters() {
 	
 	radius_multiplier = liquid_shader ? 8 : 1;
 	colour_momentum = 0.67f;
+	speed_colour_rate = 50;
 
+	enable_displaying = true;
 	dp_particles = true;
+	dp_speed = false;
 	dp_segments = true;
 	dp_worldGrid = false;
 	dp_worldBorder = true;
+	dp_worldZones = false;
 	dp_FPS = true;
 }
 
@@ -121,58 +129,63 @@ void Renderer::setDefaultParameters() {
 void Renderer::update_display() {
 // std::cout << "Renderer::update_display" << std::endl;
 	display_time.Start();
-	sf::RenderStates state;
+	if (particle_sim.isLoading()) particle_sim.load_next_positions();
 
-	window.clear(background);
-	
-	if (followed) {
-		worldView.setCenter(sf::Vector2f(followed->position[0], followed->position[1]));
-	}
+	if (enable_displaying) {
+		sf::RenderStates state;
 
-	if (dp_worldBorder) window.draw(world_vertices);
-	if (interacting) {
-		user_interact_zone.setPosition(sf::Vector2f(particle_sim.user_point[0] - particle_sim.range, particle_sim.user_point[1] - particle_sim.range));
-		window.draw(user_interact_zone);
-	}
-	if (dp_worldGrid) {
-		update_grid_vertices_colour();
-		window.draw(worldGrid_vertices);
-	}
-	if (dp_particles) {
-		update_particle_vertices();
-		state.texture = &particle_texture;
-		state.shader = &particle_shader;
-		window.draw(particle_vertices, state);
-	}
-	if (dp_segments) {
-		update_segment_vertices();
-		window.draw(segment_vertices, &segment_shader);
-	}
-	
-	if (dp_FPS) {
-		window.setView(GUIView);
-		window.draw(FPS_display);
-	}
-	window.setView(worldView);
+		window.clear(background);
+		
+		if (followed) {
+			worldView.setCenter(sf::Vector2f(followed->position[0], followed->position[1]));
+		}
 
-	window.display();
-	float time = display_time.Tick_fine(false);
+		if (dp_worldBorder) window.draw(world_vertices);
+		if (dp_worldGrid) {
+			update_grid_vertices_colour();
+			window.draw(worldGrid_vertices);
+		}
+		if (dp_worldZones) {
+			window.draw(zone_vertices);
+		}
+		if (interacting) {
+			user_interact_zone.setPosition(sf::Vector2f(particle_sim.user_point[0] - particle_sim.params.range, particle_sim.user_point[1] - particle_sim.params.range));
+			window.draw(user_interact_zone);
+		}
+		if (dp_particles) {
+			update_particle_vertices();
+			state.texture = &particle_texture;
+			state.shader = &particle_shader;
+			window.draw(particle_vertices, state);
+		}
+		if (dp_segments) {
+			update_segment_vertices();
+			window.draw(segment_vertices, &segment_shader);
+		}
+		
+		if (dp_FPS) {
+			window.setView(GUIView);
+			window.draw(FPS_display);
+		}
+		window.setView(worldView);
 
-	if (dp_FPS && time) {
-		std::stringstream oss;
-		oss << std::fixed << std::setprecision(3);
-    oss << "Display  time : " << time << " ms\n";
-    oss << "Sim loop time : " << particle_sim.get_average_loop_time() << " ms";
-    // oss << "Display  time : " << (uint32_t)(time*1000)/1000. << "\tms\n";
-    // oss << "Sim loop time : " << (uint32_t)(particle_sim.get_average_loop_time()*1000)/1000. << "\tms";
-		FPS_display.setString(oss.str());
+		window.display();
+		float time = display_time.Tick_fine(false);
+
+		if (dp_FPS && time) {
+			std::stringstream oss;
+			oss << std::fixed << std::setprecision(3);
+			oss << "Display  time : " << time << " ms\n";
+			oss << "Sim loop time : " << particle_sim.get_average_loop_time() << " ms\n";
+			oss << "Particles     : "<< particle_sim.get_active_part();
+			FPS_display.setString(oss.str());
+		}
 	}
 }
 
 
 void Renderer::update_particle_vertices() {
-	// std::cout << "Renderer::draw_particles" << std::endl;
-	float size = particle_sim.radii *radius_multiplier;
+	float size = particle_sim.params.radii *radius_multiplier;
 	float quad[4][2] = {
 		-size,	-size,
 		 size,	-size,
@@ -180,30 +193,49 @@ void Renderer::update_particle_vertices() {
 		-size,	 size,
 	};
 	uint8_t r, g, b;
+
+	float viewRectangle[2][2] = {
+		worldView.getCenter().x - worldView.getSize().x/2 - particle_sim.params.radii,
+		worldView.getCenter().y - worldView.getSize().y/2 - particle_sim.params.radii,
+		worldView.getCenter().x + worldView.getSize().x/2 + particle_sim.params.radii,
+		worldView.getCenter().y + worldView.getSize().y/2 + particle_sim.params.radii,
+	};
 	
 	for (uint32_t p=0; p<particle_sim.get_active_part(); p++) {
-		float norm = sqrt(particle_sim.particle_array[p].speed[0]*particle_sim.particle_array[p].speed[0] + particle_sim.particle_array[p].speed[1]*particle_sim.particle_array[p].speed[1]);
-		norm = std::max(20.f, norm);
-		norm /= 100;
-		r = particle_vertices[4*p].color.r*colour_momentum + (1-colour_momentum)*255* std::min(norm, 1.f);
-		g = particle_vertices[4*p].color.g*colour_momentum + (1-colour_momentum)*255* std::min(norm/4, 1.f);
-		b = particle_vertices[4*p].color.b*colour_momentum + (1-colour_momentum)*255* std::min(norm/8, 1.f);
-
-		for (uint8_t i=0; i<4; i++) {
-			particle_vertices[4*p+i].position.x = particle_sim.particle_array[p].position[0] + quad[i][0];
-			particle_vertices[4*p+i].position.y = particle_sim.particle_array[p].position[1] + quad[i][1];
-			
-			if (!liquid_shader) {
-				particle_vertices[4*p+i].color.r = r;
-				particle_vertices[4*p+i].color.g = g;
-				particle_vertices[4*p+i].color.b = b;
+		if (viewRectangle[0][0] < particle_sim[p].position[0] && particle_sim[p].position[0] < viewRectangle[1][0] &&
+		    viewRectangle[0][1] < particle_sim[p].position[1] && particle_sim[p].position[1] < viewRectangle[1][1])
+		{
+			if (dp_speed) {
+				float norm = sqrt(particle_sim[p].speed[0]*particle_sim[p].speed[0] + particle_sim[p].speed[1]*particle_sim[p].speed[1]);
+				norm = std::max(20.f, norm);
+				norm /= speed_colour_rate;
+				r = particle_vertices[4*p].color.r*colour_momentum + (1-colour_momentum)*255* std::min(norm, 1.f);
+				g = particle_vertices[4*p].color.g*colour_momentum + (1-colour_momentum)*255* std::min(norm/4, 1.f);
+				b = particle_vertices[4*p].color.b*colour_momentum + (1-colour_momentum)*255* std::min(norm/8, 1.f);
+			} else {
+				r = 255;
+				g = 255;
+				b = 255;
 			}
-			particle_vertices[4*p+i].color.a = 255;
-			
-			// particle_vertices[4*p+i].color = sf::Color::White;
+	
+			for (uint8_t i=0; i<4; i++) {
+				particle_vertices[4*p+i].position.x = particle_sim[p].position[0] + quad[i][0];
+				particle_vertices[4*p+i].position.y = particle_sim[p].position[1] + quad[i][1];
+				
+				if (!liquid_shader) {
+					particle_vertices[4*p+i].color.r = r;
+					particle_vertices[4*p+i].color.g = g;
+					particle_vertices[4*p+i].color.b = b;
+				}
+				particle_vertices[4*p+i].color.a = 255;
+			}
+		} else {
+			for (uint8_t i=0; i<4; i++) {
+				particle_vertices[4*p+i].color.a = 0;
+			}
 		}
 	}
-	for (uint32_t p=particle_sim.get_active_part(); p<NB_PART; p++) {
+	for (uint32_t p=particle_sim.get_active_part(); p<particle_sim.get_max_part(); p++) {
 		for (uint8_t i=0; i<4; i++) {
 			particle_vertices[4*p+i].color.a = 0;
 		}
@@ -247,16 +279,25 @@ void Renderer::update_grid_vertices_init() {
 }
 
 sf::Color saturation_color = sf::Color::White; // I had enough of redeclaring this each time. Although I don't know if this would have been optimised by the compiler.
+sf::Color error_color = sf::Color::Red; // I had enough of redeclaring this each time. Although I don't know if this would have been optimised by the compiler.
 
 void Renderer::update_grid_vertices_colour() {
 	World& world = particle_sim.world;
+	uint16_t viewRectangle[2][2] = { // visible cells rectangle
+		(uint16_t)std::max(0,                     (int32_t)((worldView.getCenter().x - worldView.getSize().x/2) / world.getCellSize(0)) -1 ),
+		(uint16_t)std::max(0,                     (int32_t)((worldView.getCenter().y - worldView.getSize().y/2) / world.getCellSize(1)) -1 ),
+		          std::min(world.getGridSize(0), (uint16_t)((worldView.getCenter().x + worldView.getSize().x/2) / world.getCellSize(0) +1) ),
+		          std::min(world.getGridSize(1), (uint16_t)((worldView.getCenter().y + worldView.getSize().y/2) / world.getCellSize(1) +1) )
+	};
+	// if (viewRectangle[1][0] < viewRectangle[0][0] || viewRectangle[1][1] < viewRectangle[0][1]) return; // return if we know every cell is outside the view
 	if (world.gsm_trylock()) {
 		uint32_t index = 0;
 		sf::Color color;
-		for (uint16_t y=0; y<world.getGridSize(1); y++) {
-			for (uint16_t x=0; x<world.getGridSize(0); x++) {
+		for (uint16_t y=viewRectangle[0][1]; y<viewRectangle[1][1]; y++) {
+			for (uint16_t x=viewRectangle[0][0]; x<viewRectangle[1][0]; x++) {
 				uint8_t nb_parts = world.getCell(x, y).nb_parts.load();
 				uint8_t nb_segs = world.sig() ? world.getCell_seg(x, y).nb_segs : 0;
+				index = 4*((uint32_t)y*(uint32_t)world.getGridSize(0) + (uint32_t)x);
 	
 				if (nb_parts < MAX_PART_CELL && nb_segs < MAX_SEG_CELL) {
 					color.r = 0;
@@ -268,13 +309,18 @@ void Renderer::update_grid_vertices_colour() {
 					worldGrid_vertices[index +1].color = color;
 					// worldGrid_vertices[index +2].color = color;
 					worldGrid_vertices[index +3].color = color;
+				}
+				else if (nb_parts > MAX_PART_CELL || nb_segs > MAX_SEG_CELL) {
+					worldGrid_vertices[index   ].color = error_color;
+					worldGrid_vertices[index +1].color = error_color;
+					worldGrid_vertices[index +2].color = error_color;
+					worldGrid_vertices[index +3].color = error_color;
 				} else {
-					// worldGrid_vertices[index   ].color = error_color;
+					// worldGrid_vertices[index   ].color = saturation_color;
 					worldGrid_vertices[index +1].color = saturation_color;
-					// worldGrid_vertices[index +2].color = error_color;
+					// worldGrid_vertices[index +2].color = saturation_color;
 					worldGrid_vertices[index +3].color = saturation_color;
 				}
-				index += 4;
 			}
 		}
 		
@@ -294,6 +340,33 @@ void Renderer::update_grid_vertices_colour() {
 	}
 }
 
+void Renderer::update_zone_vertices() {
+	uint32_t Vind=0;
+	for (uint16_t i=0; i < particle_sim.world.getNbOfZones(); i++) {
+		Zone& zone = particle_sim.world.getZone(i);
+		Vind = 4*i;
+		zone_vertices[Vind   ].position.x = zone.pos(0);
+		zone_vertices[Vind   ].position.y = zone.pos(1);
+
+		zone_vertices[Vind +1].position.x = zone.endPos(0);
+		zone_vertices[Vind +1].position.y = zone.pos(1);
+
+		zone_vertices[Vind +2].position.x = zone.endPos(0);
+		zone_vertices[Vind +2].position.y = zone.endPos(1);
+
+		zone_vertices[Vind +3].position.x = zone.pos(0);
+		zone_vertices[Vind +3].position.y = zone.endPos(1);
+
+		for (uint8_t v=0; v<4; v++) {
+			zone_vertices[Vind +v].color = sf::Color::Black;
+			zone_vertices[Vind +v].color.a = 64;
+			zone_vertices[Vind +v].color.r = 0;
+			zone_vertices[Vind +v].color.g = 0;
+			zone_vertices[Vind +v].color.b = 255;
+		}
+	}
+}
+
 
 void Renderer::create_window() {
 	window.create(sf::VideoMode::getDesktopMode(), "Particle sim", fullscreen ? sf::Style::Fullscreen : sf::Style::Default);
@@ -308,6 +381,10 @@ void Renderer::create_window() {
 void Renderer::toggleFullScreen() {
 	fullscreen = !fullscreen;
 	create_window();
+}
+
+void Renderer::should_use_speed() {
+	dp_speed = !particle_sim.HasNoSpeed();
 }
 
 void Renderer::takeScreenShot() {

@@ -1,0 +1,14 @@
+
+load_pos=1                    # Should particle positions (and speed) be loaded rather than calculated? 1 means yes.
+save_pos=0                    # Should particle positions (and speed) be saved as the simulation runs? For now they can't be both loaded ans saved.
+posFileName=test_saving           # Name of the file to load/save particle positions (and speed).
+comp_out_speed=0              # To decrease particle position file size, the program can avoid saving particle speed. If 1, speed won't be saved. This halves the size of the save.
+comp_discreet=0               # To decrease particle position file size, the program can save position/speed as integer instead of float. If 1, integers will be used. This halves the size of the save.
+# Both compression methods can be used at the same time to divide by 4 save file size.
+
+load_world=1                  # Should the world parameters be loaded from a file? 1 means yes.
+load_simP=1                   # Should the simulation parameters (mostly how particles behave) be loaded from a file? 1 means yes.
+save_world=0                  # Should the world parameters be saved to a file in binary? 1 means yes.
+save_simP=0                   # Should the simulation parameters be saved to a file in binary? 1 means yes.
+worldFileName=Default         # Name of the file from which world paramters will be loaded.
+simPFileName=Default          # Name of the file from which simulation paramters will be loaded.

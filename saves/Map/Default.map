@@ -1,0 +1,27 @@
+#My format follows the following rules :
+# - If the first byte of a file is 127 (aka [DEL] or 0b0111 1111), then the file is in binary. If not, the file is in full text like this one.
+# - Lines starting with a '#' are ignored. This can be used to write comments.
+# - Lines starting with a line return (aka '\n' or 0d0000 1010) are also ignored.
+# - As can be seen beneath, variables are written like : name=value0, value1, ...
+# - When a value isn't specified, like : 'name=' or 'name=value0, , value2', it is not set and can take almost any value. Note that in the program parameters not set because the value or the name wasn't provided, simply revert to their default value.
+# - Comments can also be left after values. (Funnily enough, the # doesn't do anything here but is is cleaner to leave it there).
+
+size=1800, 1000 # Size of the world : size_X, size_Y
+
+cellSize=4, 4 # Cells are used to increase the speed of collision detection. It is generally advised to keep the cell square and twice the radius of the particles.
+
+spawnRect=10, 10, 1780, 500 # top_left_X, top_left_Y, size_X, size_Y
+# This is where Particles will spawn either after teleportation or just to spawn. Indeed, when there are less particles than the maximum numbers, particles spawn at a specified rate in the spawnRect.
+
+^
+# New sections are started by a line starting with the symbol '^'. Above is section 0, and below section 1.
+# The program is capable of reading a specified number of contiguus sections from a specified starting section.
+# For segments and zones, you need to indicate the number of segment/zone you want to add then define them like shown below.
+n_segments=2
+segment 0=100, 100, 900, 500 # ([Ax, Ay], [Bx, By])
+segment 1=1700, 300, 700, 800 # ([Ax, Ay], [Bx, By])
+
+n_zones=1
+zone 0=0, 100, 200, 100, 100 # zone_function, top_left_X, top_left_Y, size_X, size_Y
+# As for now there is only one zone function (0), but I want to add more in the future.
+# The function 0 is to teleport the Particle to spawnRect.

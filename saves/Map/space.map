@@ -1,0 +1,7 @@
+
+size=10000, 10000
+cellSize=4, 4
+spawnRect=10, 10, 9980, 9980
+^
+n_segments=0
+n_zones=0

@@ -1,0 +1,36 @@
+
+size=1000, 2000
+cellSize=4, 4
+spawnRect=240, 220, 210, 100
+^
+n_segments=16
+# shower head
+segment 0=0, 100, 300, 200
+segment 1=150, 250, 450, 150
+segment 2=150, 250, 130, 300
+segment 3=450, 150, 510, 180
+
+# stick figure
+# head
+segment 4=375, 600, 625, 600
+segment 5=625, 600, 625, 850
+segment 6=625, 850, 375, 850
+segment 7=375, 850, 375, 600
+
+# body
+segment 8=500, 850, 500, 1500
+segment 9=500, 1500, 300, 2000
+segment 10=500, 1500, 700, 2000
+segment 11=500, 1000, 650, 1375
+segment 12=500, 1000, 350, 1375
+
+# face
+segment 13=410, 700, 450, 700
+segment 14=590, 700, 550, 700
+segment 15=560, 750, 450, 825
+
+n_zones=4
+zone 0=0, 0, 1990, 30, 10
+zone 1=0, 970, 1990, 30, 10
+zone 2=0, 490, 1990, 20, 10
+zone 3=0, 490, 830, 20, 20

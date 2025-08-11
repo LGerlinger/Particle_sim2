@@ -7,7 +7,7 @@ ThreadHandler::~ThreadHandler() {
 }
 
 std::thread* ThreadHandler::give_new_thread(std::thread* new_th) {
-	threads.push_back(new_th);
+	if (new_th != NULL) threads.push_back(new_th);
 	return new_th;
 }
 
@@ -35,8 +35,7 @@ void ThreadHandler::prep_new_work_loop() {
 
 void ThreadHandler::load_repartition(std::function<void(uint32_t, uint32_t)> array_worker, uint16_t fun_id, uint32_t arr_size, uint32_t work_subset) {
 	uint32_t start, end;
-	// work_subset = std::max(work_subset, (uint32_t)1); // work_subset=0 causes this function to block obviously 
-	//                                                  // I should check this here, but I prefer to do it where I know how many is the minimum work_subset.
+	work_subset = std::max(work_subset, (uint32_t)1); // work_subset=0 causes this function to block obviously 
 	                                                     
 	start = reached_work[fun_id].fetch_add(work_subset, std::memory_order_relaxed);
 	end = std::min(start + work_subset, arr_size);

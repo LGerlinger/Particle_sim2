@@ -25,7 +25,7 @@ void Segment::printSelf() {
 	std::cout << "A (" << pos[0][0] << ", " << pos[0][1] << "),  B (" << pos[1][0] << ", " << pos[1][1] << ")" << std::endl;
 	std::cout << "min (" << min[0] << ", " << min[1] << "),  max (" << max[0] << ", " << max[1] << ")" << std::endl;
 	std::cout << "vec (" << vect_norm[0] << ", " << vect_norm[1] << ")" << std::endl;
-	for (auto& c : cells) {
-		std::cout << "\t" << c[0] << ",\t" << c[1] << std::endl;
-	}
+	// for (auto& c : cells) {
+	// 	std::cout << "\t" << c[0] << ",\t" << c[1] << std::endl;
+	// }
 }

@@ -20,6 +20,7 @@ private :
 	sf::Texture particle_texture;
 	sf::VertexArray segment_vertices;
 	sf::VertexArray worldGrid_vertices;
+	sf::VertexArray zone_vertices;
 	sf::RectangleShape world_vertices; //< The rectangle of the world
 	sf::CircleShape user_interact_zone;
 
@@ -42,13 +43,17 @@ private :
 
 public :
 	void setDefaultParameters();
-	float radius_multiplier;
+	float radius_multiplier; //< For Particles : multiplier on the display of Particles' radii compared to their actual radii.
 	float colour_momentum; //< For Particles : how much of the previous colour is kept.
+	float speed_colour_rate; //< For Particles: how much speed is necessary to reach the same colour/brightness
 
+	bool enable_displaying; //< To use when you want to make the simulation run while you are away.
 	bool dp_particles;
+	bool dp_speed; //< Whether Particles should be colored based on their speed.
 	bool dp_segments;
 	bool dp_worldGrid;
 	bool dp_worldBorder;
+	bool dp_worldZones;
 	bool dp_FPS;
 	// ======== END PARAMETERS ========
 
@@ -99,6 +104,11 @@ public :
 	*/
 	void update_grid_vertices_colour();
 
+	/**
+	* @brief Updates (i.e. gives position and colour of) the world's zone vertices.
+	*/
+	void update_zone_vertices();
+
 	inline sf::View& getworldView() {return worldView;};
 	// inline sf::View& getUIView() {return UIView;};
 
@@ -111,11 +121,22 @@ public :
 	void toggleFullScreen();
 
 	/**
+	* @brief Changes @see dp_speed so that if the Particle_simulatior is loading Particle positions but not speed, Renderer won't try to display Particle speed.
+	*/
+	void should_use_speed();
+
+	/**
 	* @brief Takes a screenshot and saves it as result_images/screenshot.png .
 	*/
 	void takeScreenShot();
 
-	Particle* followed = nullptr;
-	// Toggles the displaying of the grid.
+	Particle* followed = nullptr; //< Particle that is being followed (i.e. that the camera stays centered around).
+	
+	/**
+	* @brief Toggles the displaying of the grid.
+	* @details To start displaying the World's grid, Renderer fills the vertex array @see worldGrid_vertices.
+	* When displaying of the grid stops, the memory can be freed.
+	* @warning In large worlds with lots of Cells in their grid, displaying the grid can slow down the display loop a lot or even crash the program if too much memory is asked from the GPU.
+	*/
 	void toggle_grid();
 };

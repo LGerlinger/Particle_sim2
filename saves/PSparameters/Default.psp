@@ -1,0 +1,46 @@
+
+n_threads=6 # Number of threads running the simulation.
+max_part=24000 # Maximum number of Particles that can exist at a time.
+n_part_start=24000 # Number of Particles that will be spawned at the start of the simulation.
+pps=1000 # Number of Particles to create per second if the number of active particle is less than max_part.
+
+dt=0.001 # Delta time between to simulation frames.
+radii=2 # Radius of the Particles.
+spawn_speed=0, 0 # 2D speed at which Particles will be set when spawned or teleported.
+temperature=0 # 1D speed at which Particles will be set when spawned or teleported. During setting, a random angle is given to make the speed 2D.
+
+grav_force=1000 # Force of the gravity whether vertical or centripetal.
+grav_force_decay=0.01 # How quickly the gravitational force decreases against distance in the function @see void Particle_simulator::point_gravity_invSquared(uint32_t, uint32_t).
+grav_center=900, 500 # Center of the gravitational attraction in the case of centripetal gravity.
+static_speed_block=1 # Used in static_friction. If speed < static_speed_block*dt, the Particle will stop.
+fluid_friction_coef=0.3 # Ratio of speed lost by Particles per simulation seconds (not by dt). Works like : speed = speed*(1-fluid_friction_coef*dt).
+
+translation_force=3000 # Force applied equally on all Particles when user uses attraction. Can be used to repell when negative.
+rotation_force=1000 # Force applied equally on all Particles when user uses rotation.
+range=200 # Radius of interaction for the user.
+
+cs=1 # collision Check Size. Size of the offset for the kernel (kernel size = 2*cs+1).
+
+pp_repulsion=0.45 # Ratio of the radius each Particles in overlap will repell each other per dt. A ratio of 1/2 means there will a single point contact at the end of simulation step.
+pp_repulsion_2lev=1000 # Ratio of the radius each Particles in less than 4 radius of each other will repell per dt. Can be used to make Particles stick (negative value) or avoid (positive value) each other.
+pp_repulsion_phyacc=1 # Force applied between Particles in overlap that aren't getting closer in the function @see void Particle_simulator::collision_pp_phyacc(uint32_t, uint32_t, float, float[2]).
+pp_energy_conservation=1 # Ratio of energy conserved during collision for the function @see void Particle_simulator::collision_pp_phyacc(uint32_t, uint32_t, float, float[2]).
+
+apl_point_gravity=0 # Apply centripetal force towards grav_center ?
+apl_point_gravity_invSquared=0 # Apply centripetal force decreasing with the inverse of the square of the distance (i.e. f~1/r²) towards grav_center ?
+apl_gravity=1 # Apply uniform downward force ?
+apl_vibrate=0 # Make Particles vibrate ?
+apl_fluid_friction=0 # Apply a fluid friction on the Particles (f~-v) ?
+apl_static_friction=0 # Apply static friction on the Particles ? Then if a Particle's speed goes under static_speed_block, it will instantly loose all speed.
+
+apl_pp_collision=1 # Apply Particle to Particle collision ?
+apl_ps_collision=1 # Apply Particle to Segment collision ?
+apl_world_border=1 # Apply Particle to world border collision ? If yes the Particles will always stay inbound of the world.
+apl_zone=1 # Apply Particle to Zone interaction ? If yes, the zone's function will be called when a Particle enters it.
+
+pp_collision_fun=0 # Particle to Particle collision function. @see Particle_simulator::pp_collision_t .
+#	BASE=0, TLEV=1, PHYACC=2
+ps_collision_fun=0 # Particle to Segment  collision function. @see Particle_simulator::ps_collision_t .
+#	BASE=0, REBOUND=1
+world_border_fun=0 # Particle to world border collision function. @see Particle_simulator::world_border_t .
+#	BASE=0, REBOUND=1
