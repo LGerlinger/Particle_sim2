@@ -7,6 +7,7 @@
 #include <iomanip>
 #include <iostream>
 #include <sstream>
+#include <thread>
 
 Renderer::Renderer(Particle_simulator& particle_sim_) : 
 	particle_sim(particle_sim_)
@@ -129,6 +130,9 @@ void Renderer::setDefaultParameters() {
 void Renderer::update_display() {
 // std::cout << "Renderer::update_display" << std::endl;
 	display_time.Start();
+	if (particle_sim.isDonePosLoading()) {
+		std::this_thread::sleep_for(std::chrono::milliseconds(15));
+	}
 	if (particle_sim.isLoading()) particle_sim.load_next_positions();
 
 	if (enable_displaying) {
@@ -141,7 +145,7 @@ void Renderer::update_display() {
 		}
 
 		if (dp_worldBorder) window.draw(world_vertices);
-		if (dp_worldGrid) {
+		if (dp_worldGrid && !particle_sim.isLoading()) {
 			update_grid_vertices_colour();
 			window.draw(worldGrid_vertices);
 		}
@@ -175,9 +179,10 @@ void Renderer::update_display() {
 		if (dp_FPS && time) {
 			std::stringstream oss;
 			oss << std::fixed << std::setprecision(3);
-			oss << "Display  time : " << time << " ms\n";
-			oss << "Sim loop time : " << particle_sim.get_average_loop_time() << " ms\n";
-			oss << "Particles     : "<< particle_sim.get_active_part();
+			oss << "Display time  : " << time << " ms\n";
+			oss << (particle_sim.isLoading() ? "Loading time  : " : "Sim loop time : ") << particle_sim.get_average_loop_time() << " ms\n";
+			oss << "Particles     : " << particle_sim.get_active_part() << '\n';
+			oss << "time          : " << particle_sim.get_time();
 			FPS_display.setString(oss.str());
 		}
 	}
@@ -206,6 +211,9 @@ void Renderer::update_particle_vertices() {
 		    viewRectangle[0][1] < particle_sim[p].position[1] && particle_sim[p].position[1] < viewRectangle[1][1])
 		{
 			if (dp_speed) {
+				// r = std::min((0 > particle_sim[p].speed[1]) * std::abs(particle_sim[p].speed[1])/1000 * 255, 255.f);
+				// g = std::min((0 < particle_sim[p].speed[1]) * particle_sim[p].speed[1]/1000 * 255, 255.f);
+				// b = 0;
 				float norm = sqrt(particle_sim[p].speed[0]*particle_sim[p].speed[0] + particle_sim[p].speed[1]*particle_sim[p].speed[1]);
 				norm = std::max(20.f, norm);
 				norm /= speed_colour_rate;
@@ -398,12 +406,15 @@ void Renderer::takeScreenShot() {
 
 
 void Renderer::toggle_grid() {
-	dp_worldGrid = !dp_worldGrid;
-
-	if (dp_worldGrid) {
-		worldGrid_vertices.resize(4* particle_sim.world.getGridSize(0) * particle_sim.world.getGridSize(1));
-		update_grid_vertices_init();
-	} else {
-		worldGrid_vertices.resize(0);
+	if (!particle_sim.isLoading()) {
+		
+		dp_worldGrid = !dp_worldGrid;
+		if (dp_worldGrid) {
+			worldGrid_vertices.resize(4* particle_sim.world.getGridSize(0) * particle_sim.world.getGridSize(1));
+			update_grid_vertices_init();
+		} else {
+			worldGrid_vertices.resize(0);
+		}
+		
 	}
 }

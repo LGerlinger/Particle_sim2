@@ -462,6 +462,9 @@ void SaveLoader::prepareLoadPos(uint32_t max_particles, SLinfoPos known) {
 		load(&max_speed);
 		std::cout << "\tloaded max speed "  <<  max_speed[0] << ", " << max_speed[1] << std::endl;
 	}
+
+	// With this member we know to which byte come back once the end of the file has been reach and we want to restart loading positions.
+	loadPos_start_file_offset = file.tellg();
 }
 
 void SaveLoader::savePos(Particle* particle_array, uint32_t part_arr_size, double time) {
@@ -513,13 +516,11 @@ void SaveLoader::savePos(Particle* particle_array, uint32_t part_arr_size, doubl
 
 uint32_t SaveLoader::loadPos(Particle* particle_array, uint32_t arr_size, double* time) {
 	// std::cout << "SaveLoader::loadPos" << std::endl;
-	// std::cout << "bout to load time : tellg=" << file.tellg() << '\n';
 	load(time);
-	// if (file.fail()) {
-	// 	file.clear();
-	// 	file.seekg(0, std::ios_base::beg);
-	// 	std::cout << "load time failure. tellg=" << file.tellg() << '\n';
-	// }
+	if (file.fail()) {
+		return NULLPART;
+	}
+	bool load_success = false;
 	uint32_t loaded_obj = 0;
 	float discreet_multiplier[2][2] = {
 		world_size[0] / 65536,
@@ -529,40 +530,46 @@ uint32_t SaveLoader::loadPos(Particle* particle_array, uint32_t arr_size, double
 	};
 	switch (comp_mode.compressionMode()) {
 		case SLinfoPos::compression_mode::Discreet:
-			load(comp_data, 4*sizeof(uint16_t), arr_size, &loaded_obj);
-			for (uint32_t p=0; p<loaded_obj; p++) {
-				particle_array[p].position[0] = ((uint16_t*)comp_data)[4*p   ] * discreet_multiplier[0][0];
-				particle_array[p].position[1] = ((uint16_t*)comp_data)[4*p +1] * discreet_multiplier[0][1];
-				particle_array[p].speed[0]    = (( int16_t*)comp_data)[4*p +2] * discreet_multiplier[1][0];
-				particle_array[p].speed[1]    = (( int16_t*)comp_data)[4*p +3] * discreet_multiplier[1][1];
+			load_success = load(comp_data, 4*sizeof(uint16_t), arr_size, &loaded_obj);
+			if (load_success) {
+				for (uint32_t p=0; p<loaded_obj; p++) {
+					particle_array[p].position[0] = ((uint16_t*)comp_data)[4*p   ] * discreet_multiplier[0][0];
+					particle_array[p].position[1] = ((uint16_t*)comp_data)[4*p +1] * discreet_multiplier[0][1];
+					particle_array[p].speed[0]    = (( int16_t*)comp_data)[4*p +2] * discreet_multiplier[1][0];
+					particle_array[p].speed[1]    = (( int16_t*)comp_data)[4*p +3] * discreet_multiplier[1][1];
+				}
 			}
 			break;
 		case SLinfoPos::compression_mode::PosOnly:
-			load(comp_data, 2*sizeof(float), arr_size, &loaded_obj);
-			for (uint32_t p=0; p<loaded_obj; p++) {
-				particle_array[p].position[0] = ((float*)comp_data)[2*p   ];
-				particle_array[p].position[1] = ((float*)comp_data)[2*p +1];
+			load_success = load(comp_data, 2*sizeof(float), arr_size, &loaded_obj);
+			if (load_success) {
+				for (uint32_t p=0; p<loaded_obj; p++) {
+					particle_array[p].position[0] = ((float*)comp_data)[2*p   ];
+					particle_array[p].position[1] = ((float*)comp_data)[2*p +1];
+				}
 			}
 			break;
 		case SLinfoPos::compression_mode::Both:
-			if (! load(comp_data, 2*sizeof(uint16_t), arr_size, &loaded_obj)) {
-				// I am trying to make position loading loop when reaching the end of the file.
-				// std::cout << "found end of file in loading, pos in file : " << file.tellg() << std::endl;
-				// file.clear();
-				// file.seekg(0, std::ios_base::beg);
-				// std::cout << "new pos : " << file.tellg() << std::endl;
-			};
-			for (uint32_t p=0; p<loaded_obj; p++) {
-				particle_array[p].position[0] = ((uint16_t*)comp_data)[2*p   ] * discreet_multiplier[0][0];
-				particle_array[p].position[1] = ((uint16_t*)comp_data)[2*p +1] * discreet_multiplier[0][1];
+			load_success = load(comp_data, 2*sizeof(uint16_t), arr_size, &loaded_obj);
+			if (load_success) {
+				for (uint32_t p=0; p<loaded_obj; p++) {
+					particle_array[p].position[0] = ((uint16_t*)comp_data)[2*p   ] * discreet_multiplier[0][0];
+					particle_array[p].position[1] = ((uint16_t*)comp_data)[2*p +1] * discreet_multiplier[0][1];
+				}
 			}
 			break;
 		default:
-			load(particle_array, sizeof(Particle), arr_size, &loaded_obj);
+			load_success = load(particle_array, sizeof(Particle), arr_size, &loaded_obj);
 			break;
 	}
-	return loaded_obj;
+	return load_success ? loaded_obj : NULLPART;
 }
+
+void SaveLoader::resetPosLoading() {
+	file.clear();
+	file.seekg(loadPos_start_file_offset, std::ios_base::beg);
+}
+
 
 void SaveLoader::proove_you_work_please(bool binary) {
 	std::string name[2];

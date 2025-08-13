@@ -379,7 +379,6 @@ uint32_t EventHandler::searchParticle(float x, float y) {
 			}
 		}
 	} else { // Not in a Cell or Cells aren't being filled, so we have to search though every Particle (might take long)
-		std::cout << "searching\n";
 		for (uint32_t p=0; p<simulator.get_active_part(); p++) {
 			vec[0] = x - simulator[p].position[0];
 			vec[1] = y - simulator[p].position[1];

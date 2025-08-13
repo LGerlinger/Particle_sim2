@@ -124,8 +124,9 @@ bool FileHandler::save_array(void* array, size_t byte_size_obj, uint32_t array_s
 }
 
 
-void FileHandler::load(void* obj, size_t byte_size_obj) {
+bool FileHandler::load(void* obj, size_t byte_size_obj) {
 	file.read((char*)obj, byte_size_obj);
+	return !file.fail();
 }
 
 bool FileHandler::load(void* array, size_t byte_size_obj, uint32_t max_array_size, uint32_t* loaded_obj) {
@@ -134,10 +135,10 @@ bool FileHandler::load(void* array, size_t byte_size_obj, uint32_t max_array_siz
 	file.read((char*)&read_byte_size_obj, sizeof(size_t));
 	if (read_byte_size_obj != byte_size_obj) {
 		if (file.eof()) std::cout << "FileHandler::load : reached end of file\n"; 
-		else std::cout << "FileHandler::load : incompatible object size needed and read.\n";
-		//  Position is " << file.tellg() << "  while original pos is " << original_position << "  fail flag ? " << file.fail() << std::endl;
-		// file.seekg(original_position, std::ios_base::beg); // Returning to original position
-		// std::cout << "moved to " << file.tellg() << std::endl;
+		else {
+			std::cout << "FileHandler::load : incompatible object size needed (" << byte_size_obj << ") and read (" << read_byte_size_obj << ")" << std::endl;
+			file.seekg(original_position, std::ios_base::beg); // Returning to original position
+		}
 		return false;
 	}
 

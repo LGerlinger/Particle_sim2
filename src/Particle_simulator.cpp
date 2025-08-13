@@ -5,6 +5,7 @@
 #include <cmath>
 #include <cstdlib>
 #include <iostream>
+#include <thread>
 
 PSparam PSparam::Default {
 	Default.n_threads = 6,
@@ -1014,11 +1015,27 @@ void Particle_simulator::particle_init(uint32_t part, Rectangle pos_rect) {
 
 
 void Particle_simulator::load_next_positions() {
-	if (!paused || step || quickstep) {
+	if (reinitialize_order) {
+		resetPosLoading();
+		reinitialize_order = false;
+	}
+	if (!finished_loading && (!paused || step || quickstep)) {
 		step = false;
 		if (quickstep) std::this_thread::sleep_for(std::chrono::milliseconds(50));
 		conso.Start();
-		nb_active_part = partLoader->loadPos(particle_array.data(), nb_max_part, &time[0]);
+		uint32_t returned = partLoader->loadPos(particle_array.data(), nb_max_part, &time[0]);
+		if (returned == NULLPART) {
+			finished_loading = true;
+			std::cout << "Finished loading particle positions" << std::endl;
+		} 
+		else nb_active_part = returned; 
 		conso.Tick_fine(true);
 	}
 }
+
+void Particle_simulator::resetPosLoading() {
+	if (partLoader) {
+		partLoader->resetPosLoading();
+		finished_loading = false;
+	}
+};

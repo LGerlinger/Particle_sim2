@@ -36,7 +36,7 @@ public :
 	float rotation_force; //< Force applied equally on all Particles when user uses rotation.
 	float range; //< Radius of interaction for the user.
 
-	uint8_t cs; //< collision Check Size. Size of the offset for the kernel (kernel size = 2*cs+1).
+	uint8_t cs; //< collision Check Size. How far away (in cells) are collisions checked. Size of the offset for the kernel (kernel size = 2*cs+1).
 
 	// Collision coefficients
 	float pp_repulsion; //< Ratio of the radius each Particles in overlap will repell each other per dt. A ratio of 1/2 means there will a single point contact at the end of simulation step.
@@ -85,6 +85,7 @@ private :
 	SaveLoader* partLoader = nullptr;
 
 	SLinfoPos SLI;
+	bool finished_loading = false;
 
 	// Collision function enum & pointers
 public :
@@ -101,6 +102,7 @@ public :
 	inline uint32_t get_max_part() {return particle_array.capacity();};
 	inline uint32_t get_active_part() {return nb_active_part;};
 	inline Particle& operator[](uint32_t index) {return particle_array[index];};
+	inline double get_time() {return time[0];};
 
 	World& world;
 
@@ -374,9 +376,17 @@ public :
 
 	bool isLoading() {return SLI.isLoadPos();};
 	/**
-	* @brief Loads the next Particle positions/speeds from the file.
+	* @brief Loads the next Particle positions/speeds from the file. If @see reinitialize_order, then positions are set back to their initial states.
+	* @see bool isDonePosLoading()
 	*/
 	void load_next_positions();
+
+	bool isDonePosLoading() {return finished_loading;};
+	/**
+	* @brief Resets position loading to the start.
+	*/
+	void resetPosLoading();
+
 	/**
 	@return true if Particle are being loaded without speed (due to compression), false otherwise.
 	*/

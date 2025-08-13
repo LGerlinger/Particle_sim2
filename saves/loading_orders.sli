@@ -1,5 +1,5 @@
 
-load_pos=1                    # Should particle positions (and speed) be loaded rather than calculated? 1 means yes.
+load_pos=0                    # Should particle positions (and speed) be loaded rather than calculated? 1 means yes.
 save_pos=0                    # Should particle positions (and speed) be saved as the simulation runs? For now they can't be both loaded ans saved.
 posFileName=test_saving           # Name of the file to load/save particle positions (and speed).
 comp_out_speed=0              # To decrease particle position file size, the program can avoid saving particle speed. If 1, speed won't be saved. This halves the size of the save.

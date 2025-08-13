@@ -13,12 +13,8 @@ int main() {
 
 	World world(*world_param);
 	if (load_sim->isLoadWorld()) saveLoader->loadWorldSegNZones(world, load_sim->worldName());
-	else {
-		world.add_segment(100, 100, 900, 500);
-		world.add_segment(1700, 300, 700, 800);
-	}
 	if (load_sim->isSaveWorld()) saveLoader->saveWorld(world, 10, FileHandler::KB, load_sim->worldName() + "-bin", 1);
-	world.will_use_nParticles(sim_param->max_part);
+	if (!load_sim->isLoadPos()) world.will_use_nParticles(sim_param->max_part);
 
 	Particle_simulator sim(world, *sim_param, *load_sim);
 
@@ -33,6 +29,7 @@ int main() {
 	delete saveLoader;
 	delete sim_param;
 	delete world_param;
+	bool is_loading_pos = load_sim->isLoadPos();
 	delete load_sim;
 
 	Consometre conso_this_thread;
@@ -45,7 +42,7 @@ int main() {
 			renderer.update_display();
 		}
 		conso_this_thread.End();
-		if (!renderer.getVSync()) std::this_thread::sleep_for(std::chrono::nanoseconds(Consometre::NB_TICK_SEC/renderer.FPS_limit) - conso_this_thread.getSum());
+		if (!renderer.getVSync() && !is_loading_pos) std::this_thread::sleep_for(std::chrono::nanoseconds(Consometre::NB_TICK_SEC/renderer.FPS_limit) - conso_this_thread.getSum());
 		conso_this_thread.setZero();
 	}
 

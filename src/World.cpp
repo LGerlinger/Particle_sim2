@@ -231,7 +231,6 @@ void World::go_through_segment(uint16_t seg, void(World::*fun_over_cell)(uint16_
 		while ((start_coord[0] != end_coord[0] || start_coord[1] != end_coord[1]) && cumulated_length < total_length) {
 			// Adding this part of the segment in the Cell
 			(this->*fun_over_cell)(start_coord[0], start_coord[1], seg);
-			// std::this_thread::sleep_for(std::chrono::milliseconds(10));
 
 			// adding cells next to the line to make it 3 cells wide
 			z_off[0] = start_coord[0] + offset[0];

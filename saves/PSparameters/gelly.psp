@@ -1,0 +1,46 @@
+
+n_threads=6
+max_part=24000
+n_part_start=0
+pps=1000
+
+dt=0.001
+radii=2
+spawn_speed=0, 0
+temperature=0
+
+grav_force=1000
+grav_force_decay=0.01
+grav_center=900, 500
+static_speed_block=1
+fluid_friction_coef=0.3
+
+translation_force=3000
+rotation_force=1000
+range=200
+
+cs=1
+
+pp_repulsion=0.499
+pp_repulsion_2lev=-10000
+pp_repulsion_phyacc=1
+pp_energy_conservation=1
+
+apl_point_gravity=0
+apl_point_gravity_invSquared=0
+apl_gravity=1
+apl_vibrate=0
+apl_fluid_friction=0.5
+apl_static_friction=0
+
+apl_pp_collision=1
+apl_ps_collision=1
+apl_world_border=1
+apl_zone=1
+
+pp_collision_fun=1
+#	BASE=0, TLEV=1, PHYACC=2
+ps_collision_fun=0
+#	BASE=0, REBOUND=1
+world_border_fun=0
+#	BASE=0, REBOUND=1

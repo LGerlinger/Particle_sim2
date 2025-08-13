@@ -134,8 +134,9 @@ public :
 
 	/**
 	* @brief Reads byte_size_obj bytes form the file and put it in obj.
+	* @return true if reading was successful, false otherwise.
 	*/
-	void load(void* obj, size_t byte_size_obj);
+	bool load(void* obj, size_t byte_size_obj);
 	/**
 	* @brief Reads "size of T objects" bytes form the file and put it in obj.
 	* @see void load(void*, size_t)
@@ -143,9 +144,10 @@ public :
 	template<typename T> inline void load(T* obj) { load(obj, sizeof(T)); };
 
 	/**
-	* @brief Tries to read an array from the file. Only procedes if the size of element needed corresponds to the one written.
+	* @brief Tries to read an array from the file. Only procedes if the size of an element needed corresponds to the one written.
 	* @details If there are more elements in the array than written, only the loaded_obj firsts elements are set.
 	* The read position is set at the end of the array no matter the size of the written array and max_array_size.
+	* If size byte_size_obj (the size of the objects of the array needed) doesn't correspond to the one written, the read pointer will not be moved by the function.
 	* @param array Array in which to write read elements.
 	* @param byte_size_obj Memory size of an array element.
 	* @param max_array_size Size of the given array (i.e. maximum number of element that can be set in array).

@@ -102,6 +102,7 @@ private :
 	float max_speed[2] = {20000, 20000}; //< Maximum savable speed. The higher, the less saving is precise.
 	void* comp_data = nullptr; //< Particle buffer for reading/writing. Might be an array of Particles, floats or uint16_t.
 	void delete_comp_data();
+	size_t loadPos_start_file_offset = 0; //< Position of the file read pointer after prepareLoadPos.
 
 	/**
 	* @brief Sets the compression level and prepares the buffer comp_data.
@@ -258,9 +259,16 @@ public :
 	* @param particle_array Array of Particles in which to load the data.
 	* @param part_arr_size Size of the passed array.
 	* @param time Simulation time at the moment the Particles were saved. Used so every consecutive saves can be associated to a moment in the simulation.
-	* @return The number of Particles loaded.
+	* @return The number of Particles loaded. If loading was unsuccessful (e.g. reached en of position file), returns NULLPART instead.
 	*/
 	uint32_t loadPos(Particle* particle_array, uint32_t arr_size, double* time);
+
+	/**
+	* @brief Resets the position reading to the initial state.
+	* @details Sets the file read pointer back to the position it was after reading the metadata of the positions file.
+	* @see loadPos_start_file_offset
+	*/
+	void resetPosLoading();
 
 	/**
 	* @brief Purely a debug function to check if saving and loading world and simulation works.

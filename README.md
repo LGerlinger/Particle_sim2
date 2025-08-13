@@ -24,8 +24,17 @@ World parameters and contenance files are in saves/Map and a few examples can al
 Simulation and world parameters can be loaded independently of each other.  
 Although some combinations might not work well with each other.  
 For example particle radius is often half the size of the world's cells which are often square.  
+
 **For more clarity** on what each parameter does, you can read the Default parameter files (saves/PSparameters/Default.psp or saves/Map/Default.map).  
-Little precision on saving positions : Saving is done following a mimimum simulation time step corresponding to the time step at the start of the simulation. This way you can decrease the time step without changing the simulation time between 2 consecutive positions saves. This is useful as high speeds don't go well with high time step  
+
+## Saving and loading the simulation
+In the file saves/loading_orders.sli, you can order to save the simulation that will be ran.  
+You can also order to load the positions that were saved during a previous simulation.  
+This way, you can run a slow simulation and then replay it later / faster.  
+3 little precisions :
+- Saving positions will stop at 30GB (limit set in Particle_simulator.cpp)  
+- A compression level can be used to decrease the memory size of a saved time step (see more in saves/loading_orders.sli).  
+- Saving is done following a mimimum simulation time step corresponding to the time step at the start of the simulation. This way you can decrease the time step without changing the simulation time between 2 consecutive positions saves. This is useful as high speeds don't go well with large time step. This can also be used to decrease the memory size per simulation seconds of the save. (Initial time step in saves/Psparameters/*.psp)  
 
 
 ## UI

@@ -19,7 +19,7 @@ translation_force=3000 # Force applied equally on all Particles when user uses a
 rotation_force=1000 # Force applied equally on all Particles when user uses rotation.
 range=200 # Radius of interaction for the user.
 
-cs=1 # collision Check Size. Size of the offset for the kernel (kernel size = 2*cs+1).
+cs=1 # collision Check Size. How far away (in cells) are collisions checked. Size of the offset for the kernel (kernel size = 2*cs+1).
 
 pp_repulsion=0.45 # Ratio of the radius each Particles in overlap will repell each other per dt. A ratio of 1/2 means there will a single point contact at the end of simulation step.
 pp_repulsion_2lev=1000 # Ratio of the radius each Particles in less than 4 radius of each other will repell per dt. Can be used to make Particles stick (negative value) or avoid (positive value) each other.
@@ -40,6 +40,7 @@ apl_zone=1 # Apply Particle to Zone interaction ? If yes, the zone's function wi
 
 pp_collision_fun=0 # Particle to Particle collision function. @see Particle_simulator::pp_collision_t .
 #	BASE=0, TLEV=1, PHYACC=2
+# For TLEV, it is advised to use cs=2, the others can do fine with cs=1
 ps_collision_fun=0 # Particle to Segment  collision function. @see Particle_simulator::ps_collision_t .
 #	BASE=0, REBOUND=1
 world_border_fun=0 # Particle to world border collision function. @see Particle_simulator::world_border_t .
