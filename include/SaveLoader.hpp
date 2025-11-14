@@ -259,7 +259,7 @@ public :
 	* @param particle_array Array of Particles in which to load the data.
 	* @param part_arr_size Size of the passed array.
 	* @param time Simulation time at the moment the Particles were saved. Used so every consecutive saves can be associated to a moment in the simulation.
-	* @return The number of Particles loaded. If loading was unsuccessful (e.g. reached en of position file), returns NULLPART instead.
+	* @return The number of Particles loaded. If loading was unsuccessful (e.g. reached end of position file), returns NULLPART instead.
 	*/
 	uint32_t loadPos(Particle* particle_array, uint32_t arr_size, double* time);
 

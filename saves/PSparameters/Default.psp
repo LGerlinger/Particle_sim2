@@ -1,7 +1,7 @@
 
 n_threads=6 # Number of threads running the simulation.
 max_part=24000 # Maximum number of Particles that can exist at a time.
-n_part_start=24000 # Number of Particles that will be spawned at the start of the simulation.
+n_part_start=100000 # Number of Particles that will be spawned at the start of the simulation.
 pps=1000 # Number of Particles to create per second if the number of active particle is less than max_part.
 
 dt=0.001 # Delta time between to simulation frames.

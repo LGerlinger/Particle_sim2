@@ -12,8 +12,6 @@ EventHandler::EventHandler(Renderer& renderer_, Particle_simulator& simulator_) 
 	windowSize = window.getSize();
 	window.setKeyRepeatEnabled(false);
 
-	viewSize = worldView.getSize();
-
 	for (uint8_t k=0; k<MAX_KEYS; k++) {
 		pressed_keys[k] = sf::Keyboard::Unknown;
 	}
@@ -75,11 +73,13 @@ void EventHandler::loopOverEvents() {
 			case sf::Keyboard::H :
 				if (keyboard.isKeyPressed(sf::Keyboard::LControl)) simulator.reinitialize_order = true;
 				else {
-					worldView = window.getDefaultView();
-					viewSize = worldView.getSize();
+					renderer.setHomeView();
 				}
 				break;
 			
+			case sf::Keyboard::I :
+				inverse(renderer.dp_interaction);
+				break;
 			case sf::Keyboard::J :
 				inverse(renderer.dp_worldBorder);
 				break;
@@ -101,6 +101,13 @@ void EventHandler::loopOverEvents() {
 			case sf::Keyboard::W :
 				inverse(renderer.enable_displaying);
 				break;
+			case sf::Keyboard::C :
+				if (keyboard.isKeyPressed(sf::Keyboard::LControl)) 
+					inverse(renderer.regular_clear);
+				else {
+					renderer.clear = true;
+				}
+				break;
 
 			case sf::Keyboard::Delete :
 				if (selectedPart.size()) {
@@ -119,6 +126,9 @@ void EventHandler::loopOverEvents() {
 		
 		case sf::Event::KeyReleased :
 			switch (event.key.code) {
+				case sf::Keyboard::C :
+					renderer.clear = false;
+					break;
 				case sf::Keyboard::LControl :
 					ctrlPressed = false;
 					break;
@@ -132,17 +142,17 @@ void EventHandler::loopOverEvents() {
 			break;
 
 		case sf::Event::MouseWheelScrolled:
+			renderer.changedView = true;
 			mouseWheelDelta = event.mouseWheelScroll.delta;
 			coef = mouseWheelDelta > 0 ? 0.8f : 1.25f;
 			// centre doit se décaler de coef * vecteur centre -> souris
 			mousePos = mouse.getPosition(window);
 			center = worldView.getCenter();
 			worldView.setCenter(
-				center.x + (1-coef) * ((float)mousePos.x - windowSize.x / 2) * viewSize.x / windowSize.x,
-				center.y + (1-coef) * ((float)mousePos.y - windowSize.y / 2) * viewSize.y / windowSize.y
+				center.x + (1-coef) * (mousePos.x - (float)windowSize.x / 2) * worldView.getSize().x / windowSize.x,
+				center.y + (1-coef) * (mousePos.y - (float)windowSize.y / 2) * worldView.getSize().y / windowSize.y
 			);
 			worldView.zoom(coef);
-			viewSize = worldView.getSize();
 
 			break;
 
@@ -159,7 +169,7 @@ void EventHandler::loopOverEvents() {
 				
 				case sf::Mouse::Left :
 					leftMousePressed = true;
-					sf::Vector2f worldPos = window.mapPixelToCoords(sf::Mouse::getPosition(window));
+					sf::Vector2f worldPos = window.mapPixelToCoords(sf::Mouse::getPosition(window), worldView);
 					uint32_t select = searchParticle(worldPos.x, worldPos.y);
 
 					if (!ctrlPressed) { // empty list of selected particles
@@ -248,9 +258,10 @@ void EventHandler::loopOverEvents() {
 		// event type
 		case sf::Event::MouseMoved:
 			if (rightMousePressed) {
+				renderer.changedView = true;
 				worldView.setCenter(
-					initialCenterPos.x + ((float)initialRightMousePos.x - event.mouseMove.x) * viewSize.x / windowSize.x,
-					initialCenterPos.y + ((float)initialRightMousePos.y - event.mouseMove.y) * viewSize.y / windowSize.y
+					initialCenterPos.x + ((float)initialRightMousePos.x - event.mouseMove.x) * worldView.getSize().x / windowSize.x,
+					initialCenterPos.y + ((float)initialRightMousePos.y - event.mouseMove.y) * worldView.getSize().y / windowSize.y
 				);
 
 			}
@@ -262,17 +273,8 @@ void EventHandler::loopOverEvents() {
 			break;
 
 		case sf::Event::Resized:
-			// viewSize = worldView.getSize();
-			worldView.setCenter(
-				worldView.getCenter().x + (event.size.width -  (float)windowSize.x) * viewSize.x / (2*windowSize.x),
-				worldView.getCenter().y + (event.size.height - (float)windowSize.y) * viewSize.y / (2*windowSize.y)
-			);
-			worldView.setSize(
-				viewSize.x * event.size.width  / windowSize.x,
-				viewSize.y * event.size.height / windowSize.y
-			);
+			renderer.resizeWindow(event.size.width, event.size.height);
 			windowSize = window.getSize();
-			viewSize = worldView.getSize();
 			break;
 
 		case sf::Event::LostFocus:

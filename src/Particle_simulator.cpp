@@ -60,8 +60,8 @@ PSparam PSparam::Default {
 
 Particle_simulator::Particle_simulator(World& world_, PSparam& parameters, SLinfoPos SLI_) : world(world_), SLI(SLI_) {
 	std::cout << "Particle_simulator::Particle_simulator()" << std::endl;
-	if (world.getCellSize(0) < 2*params.radii || world.getCellSize(1) < 2*params.radii) { // Capping radii at half a cellsize, so a Particle can't be bigger than a Cell
-		params.radii = std::min(world.getCellSize(0), world.getCellSize(1))/2;
+	if (world.getCellSize(0) <= 2*parameters.radii || world.getCellSize(1) <= 2*parameters.radii) { // Capping radii at half a cellsize, so a Particle can't be bigger than a Cell
+		parameters.radii = std::min(world.getCellSize(0), world.getCellSize(1))/2;
 	}
 	parameters.pp_energy_conservation = std::max(parameters.pp_energy_conservation, 0.5f); // Below 0.5 this causes some calculations to NaN the Particles.
 	setParameters(parameters);
@@ -108,6 +108,9 @@ void Particle_simulator::setParameters(PSparam& InParameters) {
 			break;
 		case (uint8_t)Particle_simulator::pp_collision_t::PHYACC :
 			pp_collision_ptr = &Particle_simulator::collision_pp_grid<&Particle_simulator::collision_pp_phyacc>;
+			break;
+		case (uint8_t)Particle_simulator::pp_collision_t::COHERENT :
+			pp_collision_ptr = &Particle_simulator::collision_pp_grid<&Particle_simulator::collision_pp_coherent>;
 			break;
 		default :
 			pp_collision_ptr = &Particle_simulator::collision_pp_grid<&Particle_simulator::collision_pp_base>;
@@ -477,6 +480,7 @@ void Particle_simulator::collision_pp_grid(uint32_t p_start, uint32_t p_end) {
 						
 						// appel fonction
 						(this->*collision_handler)(p1, p2, dist, vec);
+
 						// collision_pp_base(p1, p2, dist, vec);
 						// collision_pp_2lev(p1, p2, dist, vec);
 						// collision_pp_phyacc(p1, p2, dist, vec);
@@ -579,8 +583,8 @@ void Particle_simulator::collision_pp_phyacc(uint32_t p1, uint32_t p2, float dis
 			// v2 = v2p'*rho + v2t*tau
 			particle_array[p2].speed[0] = newVp2*rho[0] + v2[1]*tau[0];
 			particle_array[p2].speed[1] = newVp2*rho[1] + v2[1]*tau[1];
-			
-	
+
+
 			// Energy[1] = (particle_array[p1].speed[0]*particle_array[p1].speed[0] + particle_array[p1].speed[1]*particle_array[p1].speed[1] +
 			// 						 particle_array[p2].speed[0]*particle_array[p2].speed[0] + particle_array[p2].speed[1]*particle_array[p2].speed[1])/2;
 	
@@ -605,6 +609,34 @@ void Particle_simulator::collision_pp_phyacc(uint32_t p1, uint32_t p2, float dis
 			particle_array[p2].speed[1] += rho[1];
 		}
 	}
+}
+
+float coherence = 100.f;
+void Particle_simulator::collision_pp_coherent(uint32_t p1, uint32_t p2, float dist, float vec[2]) {
+	// std::cout << "collision_pp_2lev" << std::endl;
+	if (dist == 0) return;
+	float temp_coef;
+	if (dist < 2*params.radii) temp_coef = (2*params.radii - dist) * params.pp_repulsion;
+	else temp_coef = 0;
+
+	float dist_apl = (dist < 4*params.radii) * (4*params.radii - dist);
+	temp_coef += dist_apl * params.pp_repulsion_2lev;
+	temp_coef *= params.dt;
+	vec[0] *= temp_coef;
+	vec[1] *= temp_coef;
+
+	float speed_dif[2] = {
+		particle_array[p2].speed[0] - particle_array[p1].speed[0],
+		particle_array[p2].speed[1] - particle_array[p1].speed[1]
+	};
+	float coherence_multiplier = coherence * params.dt * dist_apl;
+	speed_dif[0] *= coherence_multiplier;
+	speed_dif[1] *= coherence_multiplier;
+
+	particle_array[p1].speed[0] -= vec[0] - speed_dif[0];
+	particle_array[p1].speed[1] -= vec[1] - speed_dif[1];
+	particle_array[p2].speed[0] += vec[0] - speed_dif[0];
+	particle_array[p2].speed[1] += vec[1] - speed_dif[1];
 }
 
 
@@ -1014,7 +1046,7 @@ void Particle_simulator::particle_init(uint32_t part, Rectangle pos_rect) {
 }
 
 
-void Particle_simulator::load_next_positions() {
+bool Particle_simulator::load_next_positions() {
 	if (reinitialize_order) {
 		resetPosLoading();
 		reinitialize_order = false;
@@ -1031,6 +1063,7 @@ void Particle_simulator::load_next_positions() {
 		else nb_active_part = returned; 
 		conso.Tick_fine(true);
 	}
+	return finished_loading;
 }
 
 void Particle_simulator::resetPosLoading() {

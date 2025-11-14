@@ -1,2 +1,4 @@
 -I.
 -Iinclude
+-std=c++17
+--gcc-toolchain=/opt/gcc-15

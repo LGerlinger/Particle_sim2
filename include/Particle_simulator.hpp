@@ -89,7 +89,7 @@ private :
 
 	// Collision function enum & pointers
 public :
-	enum class pp_collision_t : uint8_t{BASE = 0, TLEV, PHYACC};
+	enum class pp_collision_t : uint8_t{BASE = 0, TLEV, PHYACC, COHERENT};
 	enum class ps_collision_t : uint8_t{BASE = 0, REBOUND};
 	enum class world_border_t : uint8_t{BASE = 0, REBOUND};
 private :
@@ -99,6 +99,7 @@ private :
 	void (Particle_simulator::*world_borders_ptr)(uint32_t p_start, uint32_t p_end) = nullptr;
 
 public :
+	inline const Particle* get_particle_data() {return particle_array.data();};
 	inline uint32_t get_max_part() {return particle_array.capacity();};
 	inline uint32_t get_active_part() {return nb_active_part;};
 	inline Particle& operator[](uint32_t index) {return particle_array[index];};
@@ -108,7 +109,7 @@ public :
 
 	// Orders to give to the simulator
 	bool simulate = false;
-	bool paused = true;
+	bool paused = false;
 	bool step = false;
 	bool quickstep = false;
 
@@ -235,6 +236,7 @@ public :
 	*/
 	void collision_pp_phyacc(uint32_t p1, uint32_t p2, float dist, float vec[2]);
 
+	void collision_pp_coherent(uint32_t p1, uint32_t p2, float dist, float vec[2]);
 
 	/**
 	* @brief Check and apply collision between Particles in [p_start, p_end[ and every Segment in seg_array.
@@ -376,12 +378,13 @@ public :
 
 	bool isLoading() {return SLI.isLoadPos();};
 	/**
-	* @brief Loads the next Particle positions/speeds from the file. If @see reinitialize_order, then positions are set back to their initial states.
+	* @brief Loads the next Particle positions/speeds from the loading file. If @see reinitialize_order, then positions are set back to their initial states.
+	* @return True if there is no more positions to read from the loading file (i.e. if finished loading). False otherwise.
 	* @see bool isDonePosLoading()
 	*/
-	void load_next_positions();
+	bool load_next_positions();
 
-	bool isDonePosLoading() {return finished_loading;};
+	inline bool isDonePosLoading() {return finished_loading;};
 	/**
 	* @brief Resets position loading to the start.
 	*/

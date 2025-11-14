@@ -15,8 +15,8 @@ grav_center=5000, 5000
 static_speed_block=1
 fluid_friction_coef=1
 
-translation_force=10000
-rotation_force=1000
+translation_force=100000
+rotation_force=10000
 range=200
 
 cs=1

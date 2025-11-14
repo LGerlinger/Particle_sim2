@@ -4,6 +4,8 @@
 #include "World.hpp"
 #include "SaveLoader.hpp"
 
+#include <cstdlib>
+
 int main() {
 	SaveLoader* saveLoader = new SaveLoader;
 	PSparam* sim_param = new PSparam;
@@ -47,5 +49,5 @@ int main() {
 	}
 
 	sim.stop_simulation_threads();
-	return 0;
+	return EXIT_SUCCESS;
 }

@@ -2,7 +2,7 @@
 n_threads=6
 max_part=100000
 n_part_start=0
-pps=4000
+pps=40000
 
 dt=0.0005
 radii=2
@@ -38,7 +38,7 @@ apl_ps_collision=1
 apl_world_border=1
 apl_zone=1
 
-pp_collision_fun=1
+pp_collision_fun=0
 #	BASE=0, TLEV=1, PHYACC=2
 ps_collision_fun=0
 #	BASE=0, REBOUND=1

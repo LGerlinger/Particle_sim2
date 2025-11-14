@@ -35,8 +35,7 @@ private :
 	sf::Vector2u initialRightMousePos; //< relative position to screen
 	sf::Vector2f initialLeftMousePos; //< world position
 	sf::Vector2f initialCenterPos; //< relative to world position. Used for worldview moving.
-	sf::Vector2u windowSize; //< Used so I don't have to call window.getSize() at each view change or window resizing
-	sf::Vector2f viewSize; //< Used so I don't have to call view.getSize() at each view change or window resizing
+	sf::Vector2u windowSize;
 
 
 public :

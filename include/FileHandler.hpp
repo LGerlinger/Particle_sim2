@@ -3,6 +3,8 @@
 #include <fstream>
 #include <iostream>
 #include <map>
+#include <array>
+#include <cstdint>
 
 class FullFileName {
 public :
